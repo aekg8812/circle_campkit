@@ -13,19 +13,23 @@ export default async function GroupDashboardPage({
     data: { user },
   } = await supabase.auth.getUser()
 
+  if (!user) {
+    redirect('/login')
+  }
+
   // メンバーでなければグループ一覧へリダイレクト
   const { data: membership } = await supabase
     .from('group_members')
     .select('id')
     .eq('group_id', groupId)
-    .eq('user_id', user!.id)
+    .eq('user_id', user.id)
     .single()
 
   if (!membership) {
     redirect('/groups')
   }
 
-  const [{ data: group }, { data: members }] = await Promise.all([
+  const [{ data: group }, { data: members }, { data: plans }] = await Promise.all([
     supabase
       .from('groups')
       .select('id, name, image_url, created_by')
@@ -36,6 +40,11 @@ export default async function GroupDashboardPage({
       .select('id, position, user_id, profiles(name, avatar_url, grade)')
       .eq('group_id', groupId)
       .order('joined_at', { ascending: true }),
+    supabase
+      .from('plans')
+      .select('id, title, category, status, start_date, end_date, area, creator_id, created_at')
+      .eq('group_id', groupId)
+      .order('created_at', { ascending: false }),
   ])
 
   if (!group) {
@@ -52,7 +61,8 @@ export default async function GroupDashboardPage({
     <DashboardClient
       group={group}
       members={normalizedMembers}
-      currentUserId={user!.id}
+      plans={plans ?? []}
+      currentUserId={user.id}
     />
   )
 }
