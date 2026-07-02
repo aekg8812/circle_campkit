@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import GroupsClient from './GroupsClient'
 
 export default async function GroupsPage() {
@@ -6,6 +7,10 @@ export default async function GroupsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
 
   const [{ data: allGroups }, { data: myMemberships }] = await Promise.all([
     supabase
@@ -15,7 +20,7 @@ export default async function GroupsPage() {
     supabase
       .from('group_members')
       .select('group_id')
-      .eq('user_id', user!.id),
+      .eq('user_id', user.id),
   ])
 
   const myGroupIds = new Set((myMemberships ?? []).map((m) => m.group_id))
