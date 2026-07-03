@@ -269,14 +269,26 @@ export default function PlanDetailClient({
       return
     }
 
+    if (parsed.data.type === 'first_come' && capacity == null) {
+      setServerError('先着順では定員を入力してください')
+      setSubmitting(null)
+      return
+    }
+
+    if (parsed.data.type === 'deadline' && !parsed.data.deadline) {
+      setServerError('時間締切では締切日時を入力してください')
+      setSubmitting(null)
+      return
+    }
+
     const { error } = await supabase
       .from('recruitments')
       .upsert(
         {
           plan_id: plan.id,
           type: parsed.data.type,
-          capacity,
-          deadline: parsed.data.deadline || null,
+          capacity: parsed.data.type === 'first_come' ? capacity : null,
+          deadline: parsed.data.type === 'deadline' ? parsed.data.deadline : null,
           is_closed: parsed.data.is_closed,
         },
         { onConflict: 'plan_id' }
@@ -514,10 +526,12 @@ function RecruitmentSection({
         <div className="grid gap-4 sm:grid-cols-3">
           <DetailItem label="募集方式" value={recruitmentTypeLabel(recruitment?.type)} />
           <DetailItem label="参加人数" value={participantCountText} />
-          <DetailItem
-            label="締切"
-            value={recruitment?.deadline ? formatDateTime(recruitment.deadline) : null}
-          />
+          {recruitment?.type === 'deadline' && (
+            <DetailItem
+              label="締切"
+              value={recruitment.deadline ? formatDateTime(recruitment.deadline) : null}
+            />
+          )}
         </div>
 
         <div className="rounded-lg bg-gray-50 px-4 py-3">
@@ -588,29 +602,40 @@ function RecruitmentSection({
 
         {isCreator && (
           <form onSubmit={onSave} className="space-y-3 border-t border-gray-100 pt-4">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <select
                 value={form.type}
-                onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
+                onChange={(event) => {
+                  const type = event.target.value
+                  setForm((current) => ({
+                    ...current,
+                    type,
+                    capacity: type === 'first_come' ? current.capacity : '',
+                    deadline: type === 'deadline' ? current.deadline : '',
+                  }))
+                }}
                 className={inputClass}
               >
                 <option value="first_come">先着順</option>
                 <option value="deadline">時間締切</option>
               </select>
-              <input
-                type="number"
-                min={1}
-                value={form.capacity}
-                onChange={(event) => setForm((current) => ({ ...current, capacity: event.target.value }))}
-                className={inputClass}
-                placeholder="定員（任意）"
-              />
-              <input
-                type="datetime-local"
-                value={form.deadline}
-                onChange={(event) => setForm((current) => ({ ...current, deadline: event.target.value }))}
-                className={inputClass}
-              />
+              {form.type === 'first_come' ? (
+                <input
+                  type="number"
+                  min={1}
+                  value={form.capacity}
+                  onChange={(event) => setForm((current) => ({ ...current, capacity: event.target.value }))}
+                  className={inputClass}
+                  placeholder="定員"
+                />
+              ) : (
+                <input
+                  type="datetime-local"
+                  value={form.deadline}
+                  onChange={(event) => setForm((current) => ({ ...current, deadline: event.target.value }))}
+                  className={inputClass}
+                />
+              )}
             </div>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input

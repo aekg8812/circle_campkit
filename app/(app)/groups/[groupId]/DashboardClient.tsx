@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -53,7 +53,26 @@ export default function DashboardClient({ group, members, plans, currentUserId }
   const [activeTab, setActiveTab] = useState<PlanTab>('draft')
   const [leaving, setLeaving] = useState(false)
   const [leaveError, setLeaveError] = useState<string | null>(null)
+  const [inviteCopied, setInviteCopied] = useState(false)
+  const [inviteUrl, setInviteUrl] = useState('')
   const visiblePlans = plans.filter((plan) => plan.status === activeTab)
+
+  useEffect(() => {
+    setInviteUrl(`${window.location.origin}/groups?join=${group.id}`)
+  }, [group.id])
+
+  const copyInviteUrl = async () => {
+    if (!inviteUrl) return
+
+    await navigator.clipboard.writeText(inviteUrl)
+    setInviteCopied(true)
+    window.setTimeout(() => setInviteCopied(false), 2000)
+  }
+
+  const lineShareUrl = () => {
+    const text = `CampKitで「${group.name}」に参加してください。\n${inviteUrl}\n参加パスワードは別途共有します。`
+    return `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(text)}`
+  }
 
   const handleLeave = async () => {
     if (!confirm(`「${group.name}」から脱退しますか？`)) return
@@ -88,15 +107,38 @@ export default function DashboardClient({ group, members, plans, currentUserId }
             <span className="text-6xl text-gray-200">&#x26FA;</span>
           )}
         </div>
-        <div className="p-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-800">{group.name}</h1>
-          <button
-            onClick={handleLeave}
-            disabled={leaving}
-            className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
-          >
-            {leaving ? '処理中...' : '脱退'}
-          </button>
+        <div className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="min-w-0 text-xl font-bold text-gray-800">{group.name}</h1>
+            <button
+              onClick={handleLeave}
+              disabled={leaving}
+              className="flex-shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-500 transition hover:border-red-400 hover:text-red-700 disabled:opacity-50"
+            >
+              {leaving ? '処理中...' : '脱退'}
+            </button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={copyInviteUrl}
+              className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
+            >
+              {inviteCopied ? 'コピーしました' : '招待リンクをコピー'}
+            </button>
+            <a
+              href={inviteUrl ? lineShareUrl() : '#'}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => {
+                if (!inviteUrl) event.preventDefault()
+              }}
+              aria-disabled={!inviteUrl}
+              className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-green-700 aria-disabled:opacity-50"
+            >
+              LINEで招待
+            </a>
+          </div>
         </div>
         {leaveError && (
           <p className="text-sm text-red-600 bg-red-50 px-4 pb-3">{leaveError}</p>

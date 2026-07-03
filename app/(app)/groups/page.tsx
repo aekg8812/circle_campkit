@@ -2,7 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import GroupsClient from './GroupsClient'
 
-export default async function GroupsPage() {
+export default async function GroupsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ join?: string }>
+}) {
+  const { join } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -30,7 +35,11 @@ export default async function GroupsPage() {
   return (
     <div>
       <h1 className="text-xl font-bold text-gray-800 mb-6">グループ</h1>
-      <GroupsClient myGroups={myGroups} otherGroups={otherGroups} />
+      <GroupsClient
+        myGroups={myGroups}
+        otherGroups={otherGroups}
+        initialJoinGroupId={join ?? null}
+      />
     </div>
   )
 }
