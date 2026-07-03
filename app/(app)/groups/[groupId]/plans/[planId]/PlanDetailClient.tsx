@@ -25,6 +25,7 @@ type Plan = {
   end_date: string | null
   area: string | null
   description: string | null
+  default_transport: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -38,35 +39,8 @@ type ScheduleItem = {
   location_name: string | null
   location_type: string | null
   map_query: string | null
-}
-
-type PlanNote = {
-  id: string
-  note_type: string | null
-  body: string | null
-}
-
-type Car = {
-  id: string
-  owner_id: string | null
-  name: string | null
-  capacity: number | null
-  luggage_capacity: string | null
-  profiles: { name: string } | null
-}
-
-type TransportCar = {
-  id: string
-  car_id: string | null
   note: string | null
-  cars: Omit<Car, 'profiles'> | null
-}
-
-type Transport = {
-  id: string
-  type: string | null
-  note: string | null
-  transport_cars: TransportCar[]
+  transport: string | null
 }
 
 type Recruitment = {
@@ -93,9 +67,6 @@ type Props = {
   group: Group
   plan: Plan
   scheduleItems: ScheduleItem[]
-  planNotes: PlanNote[]
-  transports: Transport[]
-  cars: Car[]
   recruitment: Recruitment | null
   participants: Participant[]
   currentUserId: string
@@ -110,23 +81,10 @@ const statusOptions: { value: PlanStatus; label: string }[] = [
 const scheduleSchema = z.object({
   day: z.string().optional(),
   time: z.string().optional(),
-  sort_order: z.string().optional(),
   time_label: z.string().optional(),
   location_name: z.string().min(1, '場所名を入力してください'),
-  location_type: z.string().optional(),
-  map_query: z.string().optional(),
-})
-
-const noteSchema = z.object({
-  note_type: z.string().min(1, '種類を選択してください'),
-  body: z.string().min(1, '内容を入力してください'),
-})
-
-const transportSchema = z.object({
-  type: z.string().min(1, '交通手段を選択してください'),
   note: z.string().optional(),
-  car_id: z.string().optional(),
-  car_note: z.string().optional(),
+  transport: z.string().optional(),
 })
 
 const recruitmentSchema = z.object({
@@ -139,13 +97,14 @@ const recruitmentSchema = z.object({
 const inputClass =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500'
 
+const timeOptions = createHalfHourTimeOptions()
+const scheduleLabels = ['集合', '出発', '到着', '解散', '休憩', '買い出し']
+const transportOptions = ['未定', '車', '公共交通', '徒歩', 'その他']
+
 export default function PlanDetailClient({
   group,
   plan,
   scheduleItems,
-  planNotes,
-  transports,
-  cars,
   recruitment,
   participants,
   currentUserId,
@@ -154,25 +113,15 @@ export default function PlanDetailClient({
   const supabase = createClient()
   const isCreator = plan.creator_id === currentUserId
   const [updatingStatus, setUpdatingStatus] = useState<PlanStatus | null>(null)
+  const [updatingTransport, setUpdatingTransport] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
   const [scheduleForm, setScheduleForm] = useState({
     day: plan.start_date ?? '',
     time: '',
-    sort_order: '0',
     time_label: '',
     location_name: '',
-    location_type: 'destination',
-    map_query: '',
-  })
-  const [noteForm, setNoteForm] = useState({
-    note_type: 'general',
-    body: '',
-  })
-  const [transportForm, setTransportForm] = useState({
-    type: 'car',
     note: '',
-    car_id: '',
-    car_note: '',
+    transport: '',
   })
   const [recruitmentForm, setRecruitmentForm] = useState({
     type: recruitment?.type === 'deadline' ? 'deadline' : 'first_come',
@@ -221,6 +170,28 @@ export default function PlanDetailClient({
     setUpdatingStatus(null)
   }
 
+  const updateDefaultTransport = async (value: string) => {
+    setServerError(null)
+    setUpdatingTransport(true)
+
+    const { error } = await supabase
+      .from('plans')
+      .update({
+        default_transport: value || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', plan.id)
+
+    if (error) {
+      setServerError('交通手段の更新に失敗しました: ' + error.message)
+      setUpdatingTransport(false)
+      return
+    }
+
+    refreshAfterMutation()
+    setUpdatingTransport(false)
+  }
+
   const addScheduleItem = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setServerError(null)
@@ -234,15 +205,27 @@ export default function PlanDetailClient({
     }
 
     const { data } = parsed
+    const availableTimeOptions = getAvailableScheduleTimeOptions(scheduleItems, data.day || '')
+    if (data.time && !availableTimeOptions.includes(data.time)) {
+      setServerError('直前の行程より後の時刻を選択してください')
+      setSubmitting(null)
+      return
+    }
+
+    const nextSortOrder =
+      Math.max(...scheduleItems.map((item) => item.sort_order ?? 0), -1) + 1
+
     const { error } = await supabase.from('schedule_items').insert({
       plan_id: plan.id,
       day: data.day || null,
       time: data.time || null,
-      sort_order: Number(data.sort_order || 0),
+      sort_order: nextSortOrder,
       time_label: data.time_label || null,
       location_name: data.location_name,
-      location_type: data.location_type || null,
-      map_query: data.map_query || data.location_name,
+      location_type: null,
+      map_query: data.location_name,
+      note: data.note || null,
+      transport: data.transport || null,
     })
 
     if (error) {
@@ -254,93 +237,11 @@ export default function PlanDetailClient({
     setScheduleForm((current) => ({
       ...current,
       time: '',
-      sort_order: String(Number(current.sort_order || 0) + 1),
       time_label: '',
       location_name: '',
-      map_query: '',
-    }))
-    refreshAfterMutation()
-    setSubmitting(null)
-  }
-
-  const addPlanNote = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setServerError(null)
-    setSubmitting('note')
-
-    const parsed = noteSchema.safeParse(noteForm)
-    if (!parsed.success) {
-      setServerError(parsed.error.issues[0]?.message ?? '注釈を確認してください')
-      setSubmitting(null)
-      return
-    }
-
-    const { error } = await supabase.from('plan_notes').insert({
-      plan_id: plan.id,
-      note_type: parsed.data.note_type,
-      body: parsed.data.body,
-    })
-
-    if (error) {
-      setServerError('注釈の追加に失敗しました: ' + error.message)
-      setSubmitting(null)
-      return
-    }
-
-    setNoteForm((current) => ({ ...current, body: '' }))
-    refreshAfterMutation()
-    setSubmitting(null)
-  }
-
-  const addTransport = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setServerError(null)
-    setSubmitting('transport')
-
-    const parsed = transportSchema.safeParse(transportForm)
-    if (!parsed.success) {
-      setServerError(parsed.error.issues[0]?.message ?? '交通手段を確認してください')
-      setSubmitting(null)
-      return
-    }
-
-    const { data } = parsed
-    const { data: created, error } = await supabase
-      .from('transports')
-      .insert({
-        plan_id: plan.id,
-        type: data.type,
-        note: data.note || null,
-      })
-      .select('id')
-      .single()
-
-    if (error) {
-      setServerError('交通手段の追加に失敗しました: ' + error.message)
-      setSubmitting(null)
-      return
-    }
-
-    if (data.type === 'car' && data.car_id) {
-      const { error: carError } = await supabase.from('transport_cars').insert({
-        transport_id: created.id,
-        car_id: data.car_id,
-        note: data.car_note || null,
-      })
-
-      if (carError) {
-        setServerError('車の割り当てに失敗しました: ' + carError.message)
-        setSubmitting(null)
-        return
-      }
-    }
-
-    setTransportForm({
-      type: 'car',
       note: '',
-      car_id: '',
-      car_note: '',
-    })
+      transport: '',
+    }))
     refreshAfterMutation()
     setSubmitting(null)
   }
@@ -433,7 +334,7 @@ export default function PlanDetailClient({
   }
 
   const deleteRow = async (
-    table: 'schedule_items' | 'plan_notes' | 'transports',
+    table: 'schedule_items',
     id: string
   ) => {
     if (!confirm('削除しますか？')) return
@@ -499,8 +400,32 @@ export default function PlanDetailClient({
           <DetailItem label="種別" value={plan.category} />
           <DetailItem label="日程" value={formatDateRange(plan.start_date, plan.end_date)} />
           <DetailItem label="場所エリア" value={plan.area} />
+          <DetailItem label="基本交通手段" value={plan.default_transport || '未定'} />
           <DetailItem label="作成日" value={formatDate(plan.created_at)} />
         </dl>
+
+        {isCreator && (
+          <div className="mt-6">
+            <label className="mb-2 block text-sm font-bold text-gray-700">
+              全体の交通手段
+            </label>
+            <select
+              value={plan.default_transport ?? ''}
+              onChange={(event) => updateDefaultTransport(event.target.value)}
+              disabled={updatingTransport}
+              className={inputClass}
+            >
+              <option value="">未定</option>
+              {transportOptions
+                .filter((option) => option !== '未定')
+                .map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
 
         <div className="mt-6">
           <h2 className="mb-2 text-sm font-bold text-gray-700">説明</h2>
@@ -529,33 +454,13 @@ export default function PlanDetailClient({
 
       <ScheduleSection
         items={scheduleItems}
+        defaultTransport={plan.default_transport}
         isCreator={isCreator}
         form={scheduleForm}
         setForm={setScheduleForm}
         submitting={submitting === 'schedule'}
         onSubmit={addScheduleItem}
         onDelete={(id) => deleteRow('schedule_items', id)}
-      />
-
-      <NotesSection
-        notes={planNotes}
-        isCreator={isCreator}
-        form={noteForm}
-        setForm={setNoteForm}
-        submitting={submitting === 'note'}
-        onSubmit={addPlanNote}
-        onDelete={(id) => deleteRow('plan_notes', id)}
-      />
-
-      <TransportSection
-        transports={transports}
-        cars={cars}
-        isCreator={isCreator}
-        form={transportForm}
-        setForm={setTransportForm}
-        submitting={submitting === 'transport'}
-        onSubmit={addTransport}
-        onDelete={(id) => deleteRow('transports', id)}
       />
     </div>
   )
@@ -731,6 +636,7 @@ function RecruitmentSection({
 
 function ScheduleSection({
   items,
+  defaultTransport,
   isCreator,
   form,
   setForm,
@@ -739,29 +645,31 @@ function ScheduleSection({
   onDelete,
 }: {
   items: ScheduleItem[]
+  defaultTransport: string | null
   isCreator: boolean
   form: {
     day: string
     time: string
-    sort_order: string
     time_label: string
     location_name: string
-    location_type: string
-    map_query: string
+    note: string
+    transport: string
   }
   setForm: React.Dispatch<React.SetStateAction<{
     day: string
     time: string
-    sort_order: string
     time_label: string
     location_name: string
-    location_type: string
-    map_query: string
+    note: string
+    transport: string
   }>>
   submitting: boolean
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   onDelete: (id: string) => void
 }) {
+  const availableTimeOptions = getAvailableScheduleTimeOptions(items, form.day)
+  const groupedItems = groupScheduleItemsByDay(items)
+
   return (
     <section className="rounded-2xl bg-white shadow-sm">
       <SectionHeader title="行程表" />
@@ -769,318 +677,143 @@ function ScheduleSection({
         {items.length === 0 ? (
           <EmptyState text="行程はまだありません" />
         ) : (
-          items.map((item) => {
-            const mapQuery = item.map_query || item.location_name || ''
-            const mapUrl = createGoogleMapsSearchUrl(mapQuery)
-            return (
-              <div key={item.id} className="px-4 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-800">
-                      {[item.day, item.time?.slice(0, 5), item.time_label]
-                        .filter(Boolean)
-                        .join(' ')}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      {item.location_name || '場所未設定'}
-                    </p>
-                    {item.location_type && (
-                      <p className="mt-1 text-xs text-gray-400">
-                        {locationTypeLabel(item.location_type)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-shrink-0 items-center gap-2">
-                    {mapUrl && (
-                      <a
-                        href={mapUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
-                      >
-                        地図
-                      </a>
-                    )}
-                    {isCreator && (
-                      <button
-                        onClick={() => onDelete(item.id)}
-                        className="text-xs font-semibold text-red-500 hover:text-red-700"
-                      >
-                        削除
-                      </button>
-                    )}
-                  </div>
-                </div>
+          groupedItems.map((group) => (
+            <div key={group.day ?? 'undated'}>
+              <div className="bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700">
+                {formatScheduleDayLabel(group.day)}
               </div>
-            )
-          })
+              <div className="divide-y divide-gray-100">
+                {group.items.map((item) => {
+                  const mapQuery = item.map_query || item.location_name || ''
+                  const mapUrl = createGoogleMapsSearchUrl(mapQuery)
+                  const scheduleMeta = [
+                    item.time?.slice(0, 5) || '時刻未定',
+                    item.time_label,
+                  ].filter(Boolean).join(' ')
+                  const transport = item.transport || defaultTransport
+
+                  return (
+                    <div key={item.id} className="px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-800">
+                            {scheduleMeta}
+                          </p>
+                          <p className="mt-1 text-sm text-gray-600">
+                            {item.location_name || '場所未設定'}
+                          </p>
+                          {item.note && (
+                            <p className="mt-2 whitespace-pre-wrap rounded-lg bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
+                              {item.note}
+                            </p>
+                          )}
+                          {transport && (
+                            <p className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                              交通手段: {transport}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-2">
+                          {mapUrl && (
+                            <a
+                              href={mapUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
+                            >
+                              地図
+                            </a>
+                          )}
+                          {isCreator && (
+                            <button
+                              onClick={() => onDelete(item.id)}
+                              className="text-xs font-semibold text-red-500 hover:text-red-700"
+                            >
+                              削除
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))
         )}
       </div>
 
       {isCreator && (
         <form onSubmit={onSubmit} className="space-y-3 border-t border-gray-100 p-4">
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-3">
             <input
               type="date"
               value={form.day}
-              onChange={(event) => setForm((current) => ({ ...current, day: event.target.value }))}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                day: event.target.value,
+                time: '',
+              }))}
               className={inputClass}
             />
-            <input
-              type="time"
+            <select
               value={form.time}
               onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))}
               className={inputClass}
-            />
-            <input
+            >
+              <option value="">時刻未定</option>
+              {availableTimeOptions.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
+            <select
               value={form.time_label}
               onChange={(event) => setForm((current) => ({ ...current, time_label: event.target.value }))}
               className={inputClass}
-              placeholder="集合 / 出発"
-            />
-            <input
-              type="number"
-              value={form.sort_order}
-              onChange={(event) => setForm((current) => ({ ...current, sort_order: event.target.value }))}
-              className={inputClass}
-              placeholder="順番"
-            />
+            >
+              <option value="">ラベルなし</option>
+              {scheduleLabels.map((label) => (
+                <option key={label} value={label}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div>
             <input
               value={form.location_name}
               onChange={(event) => setForm((current) => ({ ...current, location_name: event.target.value }))}
               className={inputClass}
               placeholder="場所名"
             />
-            <select
-              value={form.location_type}
-              onChange={(event) => setForm((current) => ({ ...current, location_type: event.target.value }))}
-              className={inputClass}
-            >
-              <option value="meeting">集合</option>
-              <option value="destination">目的地</option>
-              <option value="dissolution">解散</option>
-              <option value="other">その他</option>
-            </select>
-            <input
-              value={form.map_query}
-              onChange={(event) => setForm((current) => ({ ...current, map_query: event.target.value }))}
-              className={inputClass}
-              placeholder="地図検索語（任意）"
-            />
           </div>
+          <textarea
+            value={form.note}
+            onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
+            className={`${inputClass} min-h-20 resize-y`}
+            placeholder="この場所の注釈（任意）"
+          />
+          <select
+            value={form.transport}
+            onChange={(event) => setForm((current) => ({ ...current, transport: event.target.value }))}
+            className={inputClass}
+          >
+            <option value="">
+              全体の交通手段を使う{defaultTransport ? `（${defaultTransport}）` : '（未定）'}
+            </option>
+            {transportOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
           <button
             disabled={submitting}
             className="w-full rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
           >
             {submitting ? '追加中...' : '行程を追加'}
-          </button>
-        </form>
-      )}
-    </section>
-  )
-}
-
-function NotesSection({
-  notes,
-  isCreator,
-  form,
-  setForm,
-  submitting,
-  onSubmit,
-  onDelete,
-}: {
-  notes: PlanNote[]
-  isCreator: boolean
-  form: { note_type: string; body: string }
-  setForm: React.Dispatch<React.SetStateAction<{ note_type: string; body: string }>>
-  submitting: boolean
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
-  onDelete: (id: string) => void
-}) {
-  return (
-    <section className="rounded-2xl bg-white shadow-sm">
-      <SectionHeader title="注釈" />
-      <div className="divide-y divide-gray-100">
-        {notes.length === 0 ? (
-          <EmptyState text="注釈はまだありません" />
-        ) : (
-          notes.map((note) => (
-            <div key={note.id} className="px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                    {noteTypeLabel(note.note_type)}
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-700">
-                    {note.body}
-                  </p>
-                </div>
-                {isCreator && (
-                  <button
-                    onClick={() => onDelete(note.id)}
-                    className="flex-shrink-0 text-xs font-semibold text-red-500 hover:text-red-700"
-                  >
-                    削除
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {isCreator && (
-        <form onSubmit={onSubmit} className="space-y-3 border-t border-gray-100 p-4">
-          <select
-            value={form.note_type}
-            onChange={(event) => setForm((current) => ({ ...current, note_type: event.target.value }))}
-            className={inputClass}
-          >
-            <option value="general">起案者より</option>
-            <option value="route">経路</option>
-            <option value="place">場所</option>
-            <option value="items">持ち物</option>
-          </select>
-          <textarea
-            value={form.body}
-            onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
-            className={`${inputClass} min-h-24 resize-y`}
-            placeholder="補足事項"
-          />
-          <button
-            disabled={submitting}
-            className="w-full rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            {submitting ? '追加中...' : '注釈を追加'}
-          </button>
-        </form>
-      )}
-    </section>
-  )
-}
-
-function TransportSection({
-  transports,
-  cars,
-  isCreator,
-  form,
-  setForm,
-  submitting,
-  onSubmit,
-  onDelete,
-}: {
-  transports: Transport[]
-  cars: Car[]
-  isCreator: boolean
-  form: { type: string; note: string; car_id: string; car_note: string }
-  setForm: React.Dispatch<React.SetStateAction<{
-    type: string
-    note: string
-    car_id: string
-    car_note: string
-  }>>
-  submitting: boolean
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
-  onDelete: (id: string) => void
-}) {
-  return (
-    <section className="rounded-2xl bg-white shadow-sm">
-      <SectionHeader title="交通手段" />
-      <div className="divide-y divide-gray-100">
-        {transports.length === 0 ? (
-          <EmptyState text="交通手段はまだありません" />
-        ) : (
-          transports.map((transport) => (
-            <div key={transport.id} className="px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">
-                    {transportTypeLabel(transport.type)}
-                  </p>
-                  {transport.note && (
-                    <p className="mt-1 text-sm text-gray-600">{transport.note}</p>
-                  )}
-                  {transport.transport_cars.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {transport.transport_cars.map((transportCar) => (
-                        <p key={transportCar.id} className="text-xs text-gray-500">
-                          車: {transportCar.cars?.name || '名称なし'}
-                          {transportCar.cars?.capacity != null
-                            ? ` / ${transportCar.cars.capacity}人`
-                            : ''}
-                          {transportCar.note ? ` / ${transportCar.note}` : ''}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {isCreator && (
-                  <button
-                    onClick={() => onDelete(transport.id)}
-                    className="flex-shrink-0 text-xs font-semibold text-red-500 hover:text-red-700"
-                  >
-                    削除
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {isCreator && (
-        <form onSubmit={onSubmit} className="space-y-3 border-t border-gray-100 p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <select
-              value={form.type}
-              onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
-              className={inputClass}
-            >
-              <option value="car">車</option>
-              <option value="train">電車</option>
-              <option value="airplane">飛行機</option>
-              <option value="other">その他</option>
-            </select>
-            <input
-              value={form.note}
-              onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
-              className={inputClass}
-              placeholder="交通手段の補足"
-            />
-          </div>
-
-          {form.type === 'car' && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <select
-                value={form.car_id}
-                onChange={(event) => setForm((current) => ({ ...current, car_id: event.target.value }))}
-                className={inputClass}
-              >
-                <option value="">車を割り当てない</option>
-                {cars.map((car) => (
-                  <option key={car.id} value={car.id}>
-                    {car.name || '名称なし'}
-                    {car.profiles?.name ? `（${car.profiles.name}）` : ''}
-                    {car.capacity != null ? ` / ${car.capacity}人` : ''}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={form.car_note}
-                onChange={(event) => setForm((current) => ({ ...current, car_note: event.target.value }))}
-                className={inputClass}
-                placeholder="車割り当てメモ"
-              />
-            </div>
-          )}
-
-          <button
-            disabled={submitting}
-            className="w-full rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            {submitting ? '追加中...' : '交通手段を追加'}
           </button>
         </form>
       )}
@@ -1116,33 +849,10 @@ function statusLabel(status: Plan['status']) {
   return '計画'
 }
 
-function locationTypeLabel(value: string) {
-  if (value === 'meeting') return '集合'
-  if (value === 'destination') return '目的地'
-  if (value === 'dissolution') return '解散'
-  return 'その他'
-}
-
-function noteTypeLabel(value: string | null) {
-  if (value === 'general') return '起案者より'
-  if (value === 'route') return '経路'
-  if (value === 'place') return '場所'
-  if (value === 'items') return '持ち物'
-  return '注釈'
-}
-
 function recruitmentTypeLabel(value: string | null | undefined) {
   if (value === 'first_come') return '先着順'
   if (value === 'deadline') return '時間締切'
   return '未設定'
-}
-
-function transportTypeLabel(value: string | null) {
-  if (value === 'car') return '車'
-  if (value === 'train') return '電車'
-  if (value === 'airplane') return '飛行機'
-  if (value === 'other') return 'その他'
-  return '交通手段'
 }
 
 function formatDateRange(startDate: string | null, endDate: string | null) {
@@ -1180,4 +890,58 @@ function toDateTimeLocalValue(value: string | null) {
   const hh = String(date.getHours()).padStart(2, '0')
   const min = String(date.getMinutes()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`
+}
+
+function createHalfHourTimeOptions() {
+  const options: string[] = []
+  for (let hour = 0; hour < 24; hour += 1) {
+    for (const minute of [0, 30]) {
+      options.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)
+    }
+  }
+  return options
+}
+
+function getAvailableScheduleTimeOptions(items: ScheduleItem[], selectedDay: string) {
+  const sameDayItems = selectedDay
+    ? items.filter((item) => item.day === selectedDay)
+    : items
+
+  const previousTime = [...sameDayItems]
+    .reverse()
+    .find((item) => item.time)?.time
+    ?.slice(0, 5)
+
+  if (!previousTime) {
+    return timeOptions
+  }
+
+  return timeOptions.filter((time) => time > previousTime)
+}
+
+function groupScheduleItemsByDay(items: ScheduleItem[]) {
+  const groups: { day: string | null; items: ScheduleItem[] }[] = []
+
+  for (const item of items) {
+    const day = item.day ?? null
+    const lastGroup = groups[groups.length - 1]
+
+    if (!lastGroup || lastGroup.day !== day) {
+      groups.push({ day, items: [item] })
+      continue
+    }
+
+    lastGroup.items.push(item)
+  }
+
+  return groups
+}
+
+function formatScheduleDayLabel(value: string | null) {
+  if (!value) return '日付未定'
+
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return value
+
+  return `${year}年${month}月${day}日`
 }
