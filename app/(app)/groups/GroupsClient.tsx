@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -18,6 +18,7 @@ type Group = {
 type Props = {
   myGroups: Group[]
   otherGroups: Group[]
+  initialJoinGroupId: string | null
 }
 
 const joinSchema = z.object({
@@ -25,11 +26,13 @@ const joinSchema = z.object({
 })
 type JoinForm = z.infer<typeof joinSchema>
 
-export default function GroupsClient({ myGroups, otherGroups }: Props) {
+export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [joiningGroup, setJoiningGroup] = useState<Group | null>(null)
   const [joinError, setJoinError] = useState<string | null>(null)
+  const [searchText, setSearchText] = useState('')
+  const [handledInitialJoin, setHandledInitialJoin] = useState(false)
 
   const {
     register,
@@ -68,6 +71,31 @@ export default function GroupsClient({ myGroups, otherGroups }: Props) {
     router.push(`/groups/${joiningGroup.id}`)
   }
 
+  const normalizedSearch = searchText.trim().toLowerCase()
+  const filteredGroups = useMemo(() => {
+    if (!normalizedSearch) return []
+    return otherGroups.filter((group) =>
+      group.name.toLowerCase().includes(normalizedSearch)
+    )
+  }, [normalizedSearch, otherGroups])
+
+  useEffect(() => {
+    if (handledInitialJoin || !initialJoinGroupId) return
+
+    const alreadyJoined = myGroups.some((group) => group.id === initialJoinGroupId)
+    if (alreadyJoined) {
+      router.replace(`/groups/${initialJoinGroupId}`)
+      setHandledInitialJoin(true)
+      return
+    }
+
+    const invitedGroup = otherGroups.find((group) => group.id === initialJoinGroupId)
+    if (invitedGroup) {
+      openJoinModal(invitedGroup)
+    }
+    setHandledInitialJoin(true)
+  }, [handledInitialJoin, initialJoinGroupId, myGroups, otherGroups, router])
+
   return (
     <div className="space-y-8">
       <Link
@@ -101,27 +129,43 @@ export default function GroupsClient({ myGroups, otherGroups }: Props) {
         )}
       </section>
 
-      {/* 参加可能なグループ */}
-      {otherGroups.length > 0 && (
-        <section>
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-            参加できるグループ
-          </h2>
-          <div className="grid grid-cols-2 gap-3">
-            {otherGroups.map((g) => (
-              <div key={g.id} className="bg-white rounded-2xl shadow-sm p-3">
-                <GroupCard group={g} />
-                <button
-                  onClick={() => openJoinModal(g)}
-                  className="mt-2 w-full py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-semibold rounded-lg transition"
-                >
-                  参加する
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <section>
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+          グループに参加する
+        </h2>
+        <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+          <input
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="グループ名で検索"
+          />
+
+          {!normalizedSearch ? (
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-400">
+              グループ名を入力して検索してください
+            </p>
+          ) : filteredGroups.length === 0 ? (
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-400">
+              該当するグループはありません
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {filteredGroups.map((g) => (
+                <div key={g.id} className="rounded-2xl border border-gray-100 bg-white p-3">
+                  <GroupCard group={g} />
+                  <button
+                    onClick={() => openJoinModal(g)}
+                    className="mt-2 w-full rounded-lg bg-green-50 py-1.5 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+                  >
+                    パスワードを入力して参加
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* 参加モーダル */}
       {joiningGroup && (
