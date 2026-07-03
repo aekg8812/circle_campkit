@@ -27,12 +27,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link href="/profile" className="text-gray-600 hover:text-green-700">
               プロフィール
             </Link>
-            <Link href="/profile/cars" className="text-gray-600 hover:text-green-700">
-              車
-            </Link>
-            <Link href="/profile/gear" className="text-gray-600 hover:text-green-700">
-              道具
-            </Link>
             <LogoutButton />
           </nav>
         </div>
