@@ -86,7 +86,10 @@ export default function GearClient({ initialGear, userId }: Props) {
     const { error } = await supabase.storage
       .from('gear')
       .upload(path, pendingPhoto, { upsert: true })
-    if (error) return null
+    if (error) {
+      setServerError('写真のアップロードに失敗しました: ' + error.message)
+      return null
+    }
     const { data } = supabase.storage.from('gear').getPublicUrl(path)
     return data.publicUrl
   }
@@ -95,6 +98,7 @@ export default function GearClient({ initialGear, userId }: Props) {
     setServerError(null)
     if (editing) {
       const photoUrl = await uploadPhoto(editing)
+      if (pendingPhoto && !photoUrl) return
       const updateData: FormValues & { photo_url?: string } = { ...data }
       if (photoUrl) updateData.photo_url = photoUrl
       const { data: updated, error } = await supabase
@@ -114,6 +118,7 @@ export default function GearClient({ initialGear, userId }: Props) {
       if (error) { setServerError(error.message); return }
       if (pendingPhoto) {
         const photoUrl = await uploadPhoto(created.id)
+        if (!photoUrl) return
         if (photoUrl) {
           await supabase.from('gear').update({ photo_url: photoUrl }).eq('id', created.id)
           created.photo_url = photoUrl
