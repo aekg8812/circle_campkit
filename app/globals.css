@@ -50,3 +50,37 @@ input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
   transition: background-color 9999s ease-in-out 0s;
 }
+
+/* ふわっと表示するアニメーション（ホーム画面などで使用） */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out both;
+}
+
+/* 印刷時は計画書プレビューだけを出力する */
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .plan-document-sheet {
+    box-shadow: none;
+    min-width: 0;
+    padding: 0;
+    break-after: page;
+  }
+
+  .plan-document-sheet:last-child {
+    break-after: auto;
+  }
+}
