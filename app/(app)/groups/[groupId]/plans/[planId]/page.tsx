@@ -22,6 +22,7 @@ export default async function PlanDetailPage({
     { data: group },
     { data: plan },
     { data: groupMembers },
+    { data: currentUserProfile },
   ] = await Promise.all([
     supabase
       .from('group_members')
@@ -44,6 +45,11 @@ export default async function PlanDetailPage({
       .from('group_members')
       .select('user_id, position')
       .eq('group_id', groupId),
+    supabase
+      .from('profiles')
+      .select('student_id, grade, department, phone, school_email, academic_advisor')
+      .eq('id', user.id)
+      .single(),
   ])
 
   if (!membership || !group) {
@@ -58,6 +64,8 @@ export default async function PlanDetailPage({
     { data: scheduleItems },
     { data: recruitment },
     { data: participants },
+    { data: reviews },
+    { data: preparations },
   ] = await Promise.all([
     supabase
       .from('schedule_items')
@@ -76,7 +84,31 @@ export default async function PlanDetailPage({
       .select('id, user_id, joined_at, profiles(name, avatar_url, grade)')
       .eq('plan_id', planId)
       .order('joined_at', { ascending: true }),
+    supabase
+      .from('plan_reviews')
+      .select('id, user_id, body, cost_per_person, created_at, profiles(name, avatar_url)')
+      .eq('plan_id', planId)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('preparations')
+      .select('id, user_id, type, body, created_at, profiles(name, avatar_url)')
+      .eq('plan_id', planId)
+      .order('created_at', { ascending: true }),
   ])
+
+  const normalizedReviews = (reviews ?? []).map((review) => ({
+    ...review,
+    profiles: Array.isArray(review.profiles)
+      ? (review.profiles[0] ?? null)
+      : review.profiles,
+  }))
+
+  const normalizedPreparations = (preparations ?? []).map((preparation) => ({
+    ...preparation,
+    profiles: Array.isArray(preparation.profiles)
+      ? (preparation.profiles[0] ?? null)
+      : preparation.profiles,
+  }))
 
   const memberPositions = new Map(
     (groupMembers ?? []).map((member) => [member.user_id, member.position ?? '部員'])
@@ -97,7 +129,10 @@ export default async function PlanDetailPage({
       scheduleItems={scheduleItems ?? []}
       recruitment={recruitment}
       participants={normalizedParticipants}
+      reviews={normalizedReviews}
+      preparations={normalizedPreparations}
       currentUserId={user.id}
+      currentUserProfile={currentUserProfile}
     />
   )
 }

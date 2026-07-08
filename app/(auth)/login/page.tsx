@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 
 const schema = z.object({
   email: z.string().email('有効なメールアドレスを入力してください'),
@@ -34,14 +35,13 @@ export default function LoginPage() {
       setServerError('メールアドレスまたはパスワードが正しくありません')
       return
     }
-    router.push('/profile')
+    router.push('/home')
     router.refresh()
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-6 text-green-700">CampKit</h1>
+    <div className="w-full max-w-sm rounded-2xl bg-white/95 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur">
+      <h1 className="text-2xl font-bold text-center mb-6 text-green-700">⛺ CampKit</h1>
         <h2 className="text-lg font-semibold mb-4 text-gray-700">ログイン</h2>
 
         {serverError && (
@@ -70,9 +70,8 @@ export default function LoginPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               パスワード
             </label>
-            <input
+            <PasswordInput
               {...register('password')}
-              type="password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
             {errors.password && (
@@ -83,7 +82,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+            className="btn-primary w-full py-3"
           >
             {isSubmitting ? 'ログイン中...' : 'ログイン'}
           </button>
@@ -95,7 +94,11 @@ export default function LoginPage() {
             新規登録
           </Link>
         </p>
-      </div>
+      <p className="text-sm text-center mt-2">
+        <Link href="/forgot-password" className="text-gray-400 hover:text-green-600 hover:underline">
+          パスワードをお忘れですか？
+        </Link>
+      </p>
     </div>
   )
 }

@@ -13,16 +13,27 @@ type Group = {
   name: string
 }
 
+type Plan = {
+  id: string
+  group_id: string
+  creator_id: string | null
+  title: string
+  category: string | null
+  start_date: string | null
+  end_date: string | null
+  area: string | null
+  description: string | null
+}
+
 type Props = {
   group: Group
-  currentUserId: string
+  plan: Plan
 }
 
 const schema = z
   .object({
     title: z.string().min(1, '行事名を入力してください'),
     category: z.string().optional().nullable(),
-    status: z.enum(['draft', 'recruiting']),
     start_date: z.string().optional().nullable(),
     end_date: z.string().optional().nullable(),
     area: z.string().optional().nullable(),
@@ -38,7 +49,7 @@ type FormValues = z.infer<typeof schema>
 const inputClass =
   'w-full border border-gray-300 rounded-lg bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500'
 
-export default function NewPlanClient({ group, currentUserId }: Props) {
+export default function EditPlanClient({ group, plan }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [serverError, setServerError] = useState<string | null>(null)
@@ -50,71 +61,58 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      title: '',
-      category: 'キャンプ',
-      status: 'draft',
-      start_date: '',
-      end_date: '',
-      area: '',
-      description: '',
+      title: plan.title ?? '',
+      category: plan.category ?? 'キャンプ',
+      start_date: plan.start_date ?? '',
+      end_date: plan.end_date ?? '',
+      area: plan.area ?? '',
+      description: plan.description ?? '',
     },
   })
 
   const onSubmit = async (data: FormValues) => {
     setServerError(null)
 
-    const { data: created, error } = await supabase
+    const { error } = await supabase
       .from('plans')
-      .insert({
-        group_id: group.id,
-        creator_id: currentUserId,
+      .update({
         title: data.title,
         category: data.category || null,
-        status: data.status,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         area: data.area || null,
         description: data.description || null,
+        updated_at: new Date().toISOString(),
       })
-      .select('id')
-      .single()
+      .eq('id', plan.id)
 
     if (error) {
-      setServerError('計画の作成に失敗しました: ' + error.message)
+      setServerError('計画の更新に失敗しました: ' + error.message)
       return
     }
 
-    const { error: participantError } = await supabase
-      .from('participants')
-      .upsert({
-        plan_id: created.id,
-        user_id: currentUserId,
-      })
-
-    if (participantError) {
-      setServerError('計画は作成されましたが、起案者の参加登録に失敗しました: ' + participantError.message)
-      return
-    }
-
-    router.push(`/groups/${group.id}/plans/${created.id}`)
+    router.push(`/groups/${group.id}/plans/${plan.id}`)
     router.refresh()
   }
 
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
-        <Link href={`/groups/${group.id}`} className="text-sm text-gray-500 hover:text-gray-700">
+        <Link
+          href={`/groups/${group.id}/plans/${plan.id}`}
+          className="text-sm text-gray-500 hover:text-gray-700"
+        >
           ← 戻る
         </Link>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
             {group.name}
           </p>
-          <h1 className="text-xl font-bold text-gray-800">計画を作成</h1>
+          <h1 className="text-xl font-bold text-gray-800">基本情報を編集</h1>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm p-6">
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
         {serverError && (
           <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
             {serverError}
@@ -126,23 +124,14 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
             <input {...register('title')} className={inputClass} placeholder="春キャンプ" />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="種別" error={errors.category?.message}>
-              <select {...register('category')} className={inputClass}>
-                <option value="キャンプ">キャンプ</option>
-                <option value="合宿">合宿</option>
-                <option value="日帰り">日帰り</option>
-                <option value="その他">その他</option>
-              </select>
-            </Field>
-
-            <Field label="状態" error={errors.status?.message}>
-              <select {...register('status')} className={inputClass}>
-                <option value="draft">下書き</option>
-                <option value="recruiting">募集として公開</option>
-              </select>
-            </Field>
-          </div>
+          <Field label="種別" error={errors.category?.message}>
+            <select {...register('category')} className={inputClass}>
+              <option value="キャンプ">キャンプ</option>
+              <option value="合宿">合宿</option>
+              <option value="日帰り">日帰り</option>
+              <option value="その他">その他</option>
+            </select>
+          </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="開始日" error={errors.start_date?.message}>
@@ -165,8 +154,8 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
             />
           </Field>
 
-          <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3">
-            {isSubmitting ? '作成中...' : '計画を作成'}
+          <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3 text-base">
+            {isSubmitting ? '保存中...' : '変更を保存'}
           </button>
         </form>
       </div>

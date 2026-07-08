@@ -17,6 +17,8 @@ import {
   type PlanDocumentFormValues,
   type ProfileRow,
 } from '@/lib/planDocument'
+import { getMissingDocumentFields } from '@/lib/profileCompleteness'
+import { useToast } from '@/components/Toast'
 
 type Group = { id: string; name: string }
 
@@ -90,6 +92,7 @@ function todayIso() {
   return `${yyyy}-${mm}-${dd}`
 }
 
+
 export default function DocumentClient({
   group,
   plan,
@@ -102,6 +105,7 @@ export default function DocumentClient({
   currentUserId,
 }: Props) {
   const supabase = createClient()
+  const toast = useToast()
   const isCreator = plan.creator_id === currentUserId
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -162,6 +166,14 @@ export default function DocumentClient({
     }
   }, [form, group, plan, scheduleItems, participants, memberPositions, creatorProfile, leaderProfile])
 
+  // 参加者ごとに、名簿で空欄になる項目を洗い出す（提出前チェック）
+  const incompleteParticipants = participants
+    .map((participant) => ({
+      name: participant.profiles?.name ?? '名前未設定',
+      missing: getMissingDocumentFields(participant.profiles).map((field) => field.label),
+    }))
+    .filter((entry) => entry.missing.length > 0)
+
   const saveDocument = async () => {
     setMessage(null)
     setSaving(true)
@@ -189,11 +201,12 @@ export default function DocumentClient({
 
     if (error) {
       setMessage({ type: 'error', text: '保存に失敗しました: ' + error.message })
+      toast('保存に失敗しました', 'error')
       setSaving(false)
       return
     }
 
-    setMessage({ type: 'ok', text: '計画書の内容を保存しました' })
+    toast('計画書の内容を保存しました')
     setSaving(false)
   }
 
@@ -210,13 +223,44 @@ export default function DocumentClient({
       anchor.download = `計画書_${plan.title || 'plan'}.pdf`
       anchor.click()
       URL.revokeObjectURL(url)
+      toast('PDFを作成しました')
     } catch (error) {
       setMessage({
         type: 'error',
         text: 'PDFの生成に失敗しました: ' + (error instanceof Error ? error.message : String(error)),
       })
+      toast('PDFの生成に失敗しました', 'error')
     }
     setGenerating(false)
+  }
+
+  // 提出メールの定型文（データから自動生成。送信はせず、コピーして各自のメールソフトで使う）
+  const mailSubject = `【合宿等申請】${documentData.title} 計画書の提出（${documentData.groupName}）`
+  const mailBody = [
+    documentData.recipient,
+    '',
+    `お世話になっております。${documentData.groupName}の${documentData.drafterName || documentData.representative.name}です。`,
+    `下記のとおり${documentData.title}を計画いたしましたので、計画書（計画書＋参加者名簿）を添付にてお送りいたします。`,
+    'ご確認のほど、よろしくお願いいたします。',
+    '',
+    `■ 行事名：${documentData.title}`,
+    `■ 日時：${documentData.dateRangeLabel}`,
+    `■ 場所：${documentData.place}`,
+    `■ 参加人数：${documentData.participantCountLabel}`,
+    '',
+    '——',
+    documentData.groupName,
+    `代表：${documentData.representative.name}`,
+    documentData.representative.email,
+  ].join('\n')
+
+  const copyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast(`${label}をコピーしました`)
+    } catch {
+      toast('コピーに失敗しました', 'error')
+    }
   }
 
   return (
@@ -236,20 +280,11 @@ export default function DocumentClient({
             <h1 className="text-xl font-bold text-gray-800">計画書（学校提出用）</h1>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700"
-          >
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => window.print()} className="btn-secondary">
             印刷
           </button>
-          <button
-            type="button"
-            onClick={downloadPdf}
-            disabled={generating}
-            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 active:scale-95 disabled:opacity-50"
-          >
+          <button type="button" onClick={downloadPdf} disabled={generating} className="btn-primary">
             {generating ? 'PDFを生成中...' : '計画書を作成する（PDF）'}
           </button>
         </div>
@@ -265,6 +300,34 @@ export default function DocumentClient({
         >
           {message.text}
         </p>
+      )}
+
+      {/* 提出前チェック：名簿の未入力を洗い出す */}
+      {participants.length > 0 && (
+        <div className="print:hidden">
+          {incompleteParticipants.length === 0 ? (
+            <p className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+              ✅ 参加者全員のプロフィールがそろっています。提出準備OKです。
+            </p>
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-bold text-amber-800">
+                ⚠️ 名簿に未入力の項目があります（{incompleteParticipants.length}名）
+              </p>
+              <ul className="mt-2 space-y-1">
+                {incompleteParticipants.map((entry) => (
+                  <li key={entry.name} className="text-xs leading-5 text-amber-700">
+                    <span className="font-semibold">{entry.name}</span>：
+                    {entry.missing.join('・')}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-700">
+                該当メンバーにプロフィールの入力を依頼してください（本人がプロフィール画面で入力すると自動で反映されます）。
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] print:block">
@@ -422,12 +485,7 @@ export default function DocumentClient({
           </FormBlock>
 
           {isCreator && (
-            <button
-              type="button"
-              onClick={saveDocument}
-              disabled={saving}
-              className="w-full rounded-lg bg-green-600 py-2 text-sm font-semibold text-white transition hover:bg-green-700 active:scale-[0.99] disabled:opacity-50"
-            >
+            <button type="button" onClick={saveDocument} disabled={saving} className="btn-primary w-full">
               {saving ? '保存中...' : '入力内容を保存'}
             </button>
           )}
@@ -444,6 +502,68 @@ export default function DocumentClient({
           </div>
         </section>
       </div>
+
+      {/* メールで提出する方法（送信はせず、手順とコピペ用の定型文を案内） */}
+      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/[0.03] print:hidden">
+        <h2 className="text-sm font-bold text-gray-700">📧 メールで提出する方法</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          このアプリからは送信しません。下の手順で、ご自身のメールから学務係・指導教員へ提出してください。
+        </p>
+
+        <ol className="mt-4 space-y-2">
+          {[
+            '上の「計画書を作成する（PDF）」でPDFをダウンロードする',
+            'メールソフト（Gmail・大学メールなど）で新規メールを作成する',
+            '宛先に学務係・指導教員のメールアドレスを入力する',
+            '下の「件名」「本文」をコピーして貼り付ける（内容は必要に応じて調整）',
+            'ダウンロードした計画書PDFを添付する',
+            '送信する',
+          ].map((step, index) => (
+            <li key={index} className="flex gap-2.5 text-sm text-gray-700">
+              <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-green-600 text-xs font-bold text-white">
+                {index + 1}
+              </span>
+              <span className="leading-6">{step}</span>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-4 space-y-3">
+          <div className="rounded-xl border border-gray-100 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-gray-500">件名</p>
+              <button
+                type="button"
+                onClick={() => copyText(mailSubject, '件名')}
+                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+              >
+                コピー
+              </button>
+            </div>
+            <p className="mt-1.5 break-words text-sm text-gray-800">{mailSubject}</p>
+          </div>
+
+          <div className="rounded-xl border border-gray-100 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-gray-500">本文</p>
+              <button
+                type="button"
+                onClick={() => copyText(mailBody, '本文')}
+                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+              >
+                コピー
+              </button>
+            </div>
+            <pre className="mt-1.5 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-gray-800">
+              {mailBody}
+            </pre>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs text-gray-400">
+          ※ 件名・本文は入力内容から自動で作成されます。提出先のルールに合わせて調整してください。
+        </p>
+      </section>
     </div>
   )
 }

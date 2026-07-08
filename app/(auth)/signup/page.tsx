@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useState } from 'react'
+import PasswordInput from '@/components/PasswordInput'
 
 const schema = z.object({
   name: z.string().min(1, '名前を入力してください'),
@@ -37,7 +38,8 @@ export default function SignupPage() {
       password: data.password,
       options: {
         data: { name: data.name },
-        emailRedirectTo: `${location.origin}/auth/callback`,
+        // 確認後は、まずプロフィール入力へ誘導する（オンボーディング）
+        emailRedirectTo: `${location.origin}/auth/callback?next=/profile`,
       },
     })
     if (error) {
@@ -49,24 +51,21 @@ export default function SignupPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-md p-8 text-center">
-          <h1 className="text-2xl font-bold text-green-700 mb-4">確認メールを送信しました</h1>
-          <p className="text-sm text-gray-600">
-            登録したメールアドレスに確認リンクを送信しました。リンクをクリックしてアカウントを有効化してください。
-          </p>
-          <Link href="/login" className="mt-6 inline-block text-green-600 hover:underline text-sm">
-            ログインページへ
-          </Link>
-        </div>
+      <div className="w-full max-w-sm rounded-2xl bg-white/95 p-8 text-center shadow-xl ring-1 ring-black/5 backdrop-blur">
+        <h1 className="text-2xl font-bold text-green-700 mb-4">確認メールを送信しました</h1>
+        <p className="text-sm text-gray-600">
+          登録したメールアドレスに確認リンクを送信しました。リンクをクリックしてアカウントを有効化してください。
+        </p>
+        <Link href="/login" className="mt-6 inline-block text-green-600 hover:underline text-sm">
+          ログインページへ
+        </Link>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-2 text-green-700">CampKit</h1>
+    <div className="w-full max-w-sm rounded-2xl bg-white/95 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur">
+      <h1 className="text-2xl font-bold text-center mb-2 text-green-700">⛺ CampKit</h1>
         <h2 className="text-lg font-semibold mb-1 text-gray-700">新規登録</h2>
 
         <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-4">
@@ -109,9 +108,8 @@ export default function SignupPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
-            <input
+            <PasswordInput
               {...register('password')}
-              type="password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
             {errors.password && (
@@ -123,9 +121,8 @@ export default function SignupPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               パスワード（確認）
             </label>
-            <input
+            <PasswordInput
               {...register('confirmPassword')}
-              type="password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
             {errors.confirmPassword && (
@@ -136,19 +133,18 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+            className="btn-primary w-full py-3"
           >
             {isSubmitting ? '登録中...' : 'アカウント作成'}
           </button>
         </form>
 
-        <p className="text-sm text-center text-gray-500 mt-6">
-          すでにアカウントをお持ちの方は{' '}
-          <Link href="/login" className="text-green-600 hover:underline font-medium">
-            ログイン
-          </Link>
-        </p>
-      </div>
+      <p className="text-sm text-center text-gray-500 mt-6">
+        すでにアカウントをお持ちの方は{' '}
+        <Link href="/login" className="text-green-600 hover:underline font-medium">
+          ログイン
+        </Link>
+      </p>
     </div>
   )
 }

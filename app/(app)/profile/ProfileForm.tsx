@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useState, useRef } from 'react'
 import Image from 'next/image'
+import { useToast } from '@/components/Toast'
 
 const schema = z.object({
   name: z.string().min(1, '名前を入力してください'),
@@ -44,10 +45,10 @@ type Props = {
 
 export default function ProfileForm({ profile, userId }: Props) {
   const supabase = createClient()
+  const toast = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null)
   const [uploading, setUploading] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
 
   const {
@@ -89,11 +90,11 @@ export default function ProfileForm({ profile, userId }: Props) {
       .eq('id', userId)
     setAvatarUrl(publicUrl)
     setUploading(false)
+    toast('写真を更新しました')
   }
 
   const onSubmit = async (data: FormValues) => {
     setServerError(null)
-    setSaved(false)
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -103,9 +104,10 @@ export default function ProfileForm({ profile, userId }: Props) {
       .eq('id', userId)
     if (error) {
       setServerError('保存に失敗しました: ' + error.message)
+      toast('保存に失敗しました', 'error')
       return
     }
-    setSaved(true)
+    toast('プロフィールを保存しました')
   }
 
   return (
@@ -145,9 +147,6 @@ export default function ProfileForm({ profile, userId }: Props) {
       {serverError && (
         <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">{serverError}</p>
       )}
-      {saved && (
-        <p className="text-sm text-green-600 bg-green-50 rounded-lg px-3 py-2 mb-4">保存しました</p>
-      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Field label="氏名 *" error={errors.name?.message}>
@@ -179,11 +178,7 @@ export default function ProfileForm({ profile, userId }: Props) {
           <input {...register('academic_advisor')} className={inputClass} placeholder="田中 教授" />
         </Field>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-        >
+        <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3">
           {isSubmitting ? '保存中...' : '保存'}
         </button>
       </form>
