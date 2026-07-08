@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import GroupsClient from './GroupsClient'
 
 export default async function GroupsPage({
@@ -34,7 +35,12 @@ export default async function GroupsPage({
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-gray-800 mb-6">グループ</h1>
+      <div className="mb-6 flex items-center gap-3">
+        <Link href="/home" className="text-sm text-gray-500 hover:text-gray-700">
+          ← ホーム
+        </Link>
+        <h1 className="text-xl font-bold text-gray-800">グループに参加・作成</h1>
+      </div>
       <GroupsClient
         myGroups={myGroups}
         otherGroups={otherGroups}

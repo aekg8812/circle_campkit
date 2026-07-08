@@ -182,11 +182,7 @@ export default function NewGroupPage() {
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-          >
+          <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3">
             {isSubmitting ? '作成中...' : 'グループを作成'}
           </button>
         </form>

@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import PasswordInput from '@/components/PasswordInput'
+import { EmptyState } from '@/components/EmptyState'
 
 type Group = {
   id: string
@@ -100,7 +102,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
     <div className="space-y-8">
       <Link
         href="/groups/new"
-        className="block w-full text-center py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition text-sm"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.99]"
       >
         ＋ 新しいグループを作成
       </Link>
@@ -111,9 +113,11 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
           参加中のグループ
         </h2>
         {myGroups.length === 0 ? (
-          <p className="text-center text-gray-400 py-10 text-sm bg-white rounded-2xl shadow-sm">
-            まだグループに参加していません
-          </p>
+          <EmptyState
+            icon="⛺"
+            title="まだグループに参加していません"
+            description="下の検索から参加するか、新しいグループを作りましょう。"
+          />
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {myGroups.map((g) => (
@@ -192,9 +196,8 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
 
             <form onSubmit={handleSubmit(onJoin)} className="space-y-3">
               <div>
-                <input
+                <PasswordInput
                   {...register('password')}
-                  type="password"
                   placeholder="パスワード"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   autoFocus
