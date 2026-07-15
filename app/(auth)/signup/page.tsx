@@ -38,8 +38,9 @@ export default function SignupPage() {
       password: data.password,
       options: {
         data: { name: data.name },
-        // 確認後は、まずプロフィール入力へ誘導する（オンボーディング）
-        emailRedirectTo: `${location.origin}/auth/callback?next=/profile`,
+        // 確認後は、まずプロフィール入力へ誘導する（オンボーディング）。
+        // onboarding=1 が付くと、プロフィール保存後にホームへ遷移する。
+        emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent('/profile?onboarding=1')}`,
       },
     })
     if (error) {

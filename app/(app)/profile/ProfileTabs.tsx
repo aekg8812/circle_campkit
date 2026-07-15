@@ -41,6 +41,7 @@ type Props = {
   cars: Car[]
   gear: Gear[]
   userId: string
+  redirectHomeOnSave?: boolean
 }
 
 const tabs: { id: Tab; label: string }[] = [
@@ -49,7 +50,13 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'gear', label: '道具' },
 ]
 
-export default function ProfileTabs({ profile, cars, gear, userId }: Props) {
+export default function ProfileTabs({
+  profile,
+  cars,
+  gear,
+  userId,
+  redirectHomeOnSave = false,
+}: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('profile')
 
   return (
@@ -73,7 +80,9 @@ export default function ProfileTabs({ profile, cars, gear, userId }: Props) {
         </div>
       </div>
 
-      {activeTab === 'profile' && <ProfileForm profile={profile} userId={userId} />}
+      {activeTab === 'profile' && (
+        <ProfileForm profile={profile} userId={userId} redirectHomeOnSave={redirectHomeOnSave} />
+      )}
       {activeTab === 'cars' && <CarsClient initialCars={cars} userId={userId} />}
       {activeTab === 'gear' && <GearClient initialGear={gear} userId={userId} />}
     </div>

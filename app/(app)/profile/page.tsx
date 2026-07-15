@@ -2,9 +2,16 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import ProfileTabs from './ProfileTabs'
+import GroupRolesClient from './GroupRolesClient'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ onboarding?: string }>
+}) {
+  const { onboarding } = await searchParams
+  const isOnboarding = onboarding === '1'
   const supabase = await createClient()
   const {
     data: { user },
@@ -14,25 +21,39 @@ export default async function ProfilePage() {
     redirect('/login')
   }
 
-  const [{ data: profile }, { data: cars }, { data: gear }] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single(),
-    supabase
-      .from('cars')
-      .select('*')
-      .eq('owner_id', user.id)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('gear')
-      .select('*')
-      .eq('owner_id', user.id)
-      .order('created_at', { ascending: false }),
-  ])
+  const [{ data: profile }, { data: cars }, { data: gear }, { data: memberships }] =
+    await Promise.all([
+      supabase.from('profiles').select('*').eq('id', user.id).single(),
+      supabase
+        .from('cars')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('gear')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('group_members')
+        .select('group_id, position, groups(name)')
+        .eq('user_id', user.id),
+    ])
 
   const missingFields = getMissingDocumentFields(profile)
+
+  const groupRoles = (memberships ?? [])
+    .map((membership) => {
+      const group = Array.isArray(membership.groups)
+        ? membership.groups[0]
+        : membership.groups
+      return {
+        group_id: membership.group_id as string,
+        group_name: group?.name ?? '（名称未設定）',
+        position: membership.position ?? '部員',
+      }
+    })
+    .filter((entry) => entry.group_id)
 
   return (
     <div>
@@ -64,7 +85,12 @@ export default async function ProfilePage() {
         cars={cars ?? []}
         gear={gear ?? []}
         userId={user.id}
+        redirectHomeOnSave={isOnboarding}
       />
+
+      <div className="mt-6">
+        <GroupRolesClient memberships={groupRoles} />
+      </div>
     </div>
   )
 }

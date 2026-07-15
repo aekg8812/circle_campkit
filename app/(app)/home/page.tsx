@@ -3,6 +3,14 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
+import {
+  formatCapacity,
+  formatDeadline,
+  getDeadlineStatus,
+  getPlanPhase,
+  isRecruitmentClosed,
+  type RecruitmentInfo,
+} from '@/lib/recruitmentStatus'
 
 export default async function HomePage() {
   const supabase = await createClient()
@@ -27,7 +35,7 @@ export default async function HomePage() {
         .eq('user_id', user.id),
       supabase
         .from('participants')
-        .select('plans(id, group_id, title, status, start_date, end_date)')
+        .select('plan_id, plans(id, group_id, title, status, start_date, end_date)')
         .eq('user_id', user.id),
     ])
 
@@ -43,10 +51,24 @@ export default async function HomePage() {
     .filter((entry) => entry.group != null)
 
   const groupNames = new Map(myGroups.map((entry) => [entry.group!.id, entry.group!.name]))
+  const groupIds = myGroups.map((entry) => entry.group!.id)
 
-  // 参加中の計画のうち、これから行われる直近の1件を「次の予定」として選ぶ
+  // 所属グループで「募集中」の計画（未参加のものを後で抽出する）
+  const { data: recruitingPlans } =
+    groupIds.length > 0
+      ? await supabase
+          .from('plans')
+          .select('id, group_id, title, status, start_date, end_date')
+          .in('group_id', groupIds)
+          .eq('status', 'recruiting')
+      : { data: [] }
+
   const today = new Date().toISOString().slice(0, 10)
-  const nextPlan = (myParticipations ?? [])
+  const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const myParticipantPlanIds = new Set((myParticipations ?? []).map((p) => p.plan_id))
+
+  // ① 参加確定した計画：開始7日前〜開催中のものだけ（多すぎて見にくくならないように）
+  const confirmedSoon = (myParticipations ?? [])
     .map((participation) =>
       Array.isArray(participation.plans)
         ? (participation.plans[0] ?? null)
@@ -56,17 +78,80 @@ export default async function HomePage() {
       (plan): plan is NonNullable<typeof plan> =>
         plan != null &&
         plan.status !== 'past' &&
-        (plan.start_date == null || plan.start_date >= today)
+        plan.start_date != null &&
+        plan.start_date <= in7Days &&
+        (plan.end_date ?? plan.start_date) >= today
     )
-    .sort((a, b) => (a.start_date ?? '9999').localeCompare(b.start_date ?? '9999'))[0]
+    .map((plan) => ({ ...plan, kind: 'confirmed' as const }))
+
+  // ② 自分が参加していない、募集中の計画
+  const openPlans = (recruitingPlans ?? []).filter(
+    (plan) => !myParticipantPlanIds.has(plan.id)
+  )
+
+  // 募集中カードに出す締切・定員の情報
+  const openPlanIds = openPlans.map((plan) => plan.id)
+  const [{ data: openRecruitments }, { data: openParticipantRows }] =
+    openPlanIds.length > 0
+      ? await Promise.all([
+          supabase
+            .from('recruitments')
+            .select('plan_id, deadline, capacity, is_closed')
+            .in('plan_id', openPlanIds),
+          supabase.from('participants').select('plan_id').in('plan_id', openPlanIds),
+        ])
+      : [{ data: [] }, { data: [] }]
+
+  const openCounts: Record<string, number> = {}
+  for (const row of openParticipantRows ?? []) {
+    openCounts[row.plan_id] = (openCounts[row.plan_id] ?? 0) + 1
+  }
+
+  const recruitmentByPlan = Object.fromEntries(
+    (openRecruitments ?? []).map((r) => [
+      r.plan_id,
+      { deadline: r.deadline, capacity: r.capacity, is_closed: r.is_closed },
+    ])
+  )
+
+  // 締め切られた（＝実施）・実施日を過ぎた（＝過去）ものは参加できないので出さない
+  const recruitingOpen = openPlans
+    .filter(
+      (plan) =>
+        getPlanPhase({
+          status: plan.status,
+          recruitmentClosed: isRecruitmentClosed(
+            recruitmentByPlan[plan.id],
+            openCounts[plan.id] ?? 0
+          ),
+          startDate: plan.start_date,
+          endDate: plan.end_date,
+          today,
+        }) === 'recruiting'
+    )
+    .map((plan) => ({
+      ...plan,
+      kind: 'recruiting' as const,
+      recruitment: recruitmentByPlan[plan.id] ?? null,
+      participantCount: openCounts[plan.id] ?? 0,
+    }))
+
+  const upcoming = [
+    ...confirmedSoon.map((plan) => ({
+      ...plan,
+      recruitment: null,
+      participantCount: 0,
+    })),
+    ...recruitingOpen,
+  ].sort((a, b) => (a.start_date ?? '9999').localeCompare(b.start_date ?? '9999'))
 
   return (
     <div className="space-y-6">
-      {/* トップ: 次の予定があればヒーロー表示、なければ使い方ガイドへの案内 */}
-      {nextPlan ? (
-        <NextPlanHero plan={nextPlan} groupName={groupNames.get(nextPlan.group_id) ?? ''} today={today} />
+      {/* トップ: 今後の予定（参加確定は7日前から＋未参加の募集中）。無ければ案内 */}
+      {upcoming.length > 0 ? (
+        <UpcomingList items={upcoming} groupNames={groupNames} today={today} />
       ) : (
-        <WelcomeStrip />
+        myGroups.length === 0 && <WelcomeStrip />
       )}
 
       {/* プロフィール完成度バナー（計画書に必要な項目が未入力のときだけ表示） */}
@@ -153,56 +238,143 @@ export default async function HomePage() {
   )
 }
 
-/** 参加中の直近の計画を大きく表示するヒーロー（カウントダウン付き） */
-function NextPlanHero({
-  plan,
+type UpcomingItem = {
+  id: string
+  group_id: string
+  title: string
+  start_date: string | null
+  end_date: string | null
+  kind: 'confirmed' | 'recruiting'
+  recruitment: RecruitmentInfo | null
+  participantCount: number
+}
+
+/** 今後の予定リスト（参加確定＝緑ヒーロー風、募集中＝白カード） */
+function UpcomingList({
+  items,
+  groupNames,
+  today,
+}: {
+  items: UpcomingItem[]
+  groupNames: Map<string, string>
+  today: string
+}) {
+  return (
+    <section className="animate-fade-in-up space-y-3">
+      <h2 className="text-base font-bold text-gray-800">今後の予定</h2>
+      <div className="space-y-3">
+        {items.map((item) => (
+          <UpcomingCard
+            key={item.id}
+            item={item}
+            groupName={groupNames.get(item.group_id) ?? ''}
+            today={today}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function UpcomingCard({
+  item,
   groupName,
   today,
 }: {
-  plan: {
-    id: string
-    group_id: string
-    title: string
-    start_date: string | null
-    end_date: string | null
-  }
+  item: UpcomingItem
   groupName: string
   today: string
 }) {
-  const countdown = getCountdownLabel(plan.start_date, today)
   const dateLabel =
-    plan.start_date && plan.end_date && plan.start_date !== plan.end_date
-      ? `${formatJpDate(plan.start_date)} 〜 ${formatJpDate(plan.end_date)}`
-      : plan.start_date
-        ? formatJpDate(plan.start_date)
+    item.start_date && item.end_date && item.start_date !== item.end_date
+      ? `${formatJpDate(item.start_date)} 〜 ${formatJpDate(item.end_date)}`
+      : item.start_date
+        ? formatJpDate(item.start_date)
         : '日程未定'
+
+  const href = `/groups/${item.group_id}/plans/${item.id}`
+
+  // 参加確定は緑のヒーロー風、募集中は白カード
+  if (item.kind === 'confirmed') {
+    const countdown = getCountdownLabel(item.start_date, today)
+    return (
+      <Link
+        href={href}
+        className="group relative block overflow-hidden rounded-2xl bg-gradient-to-br from-green-600 to-emerald-500 p-5 text-white shadow-sm transition hover:shadow-lg active:scale-[0.99]"
+      >
+        <HeroSilhouette />
+        <div className="relative z-10">
+          <div className="flex items-center justify-between">
+            <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-bold backdrop-blur-sm">
+              参加確定
+            </span>
+            {countdown && (
+              <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold backdrop-blur-sm">
+                {countdown}
+              </span>
+            )}
+          </div>
+          <h3 className="mt-2 text-lg font-bold leading-tight">{item.title}</h3>
+          <p className="mt-1 text-sm text-green-50">
+            {groupName && `${groupName}・`}
+            {dateLabel}
+          </p>
+        </div>
+      </Link>
+    )
+  }
+
+  // 募集中カード：締切状況・定員を出し、「参加する」で詳細ページへ
+  const deadlineStatus = getDeadlineStatus(item.recruitment?.deadline ?? null)
+  const isClosed = item.recruitment?.is_closed === true
 
   return (
     <Link
-      href={`/groups/${plan.group_id}/plans/${plan.id}`}
-      className="animate-fade-in-up group relative block overflow-hidden rounded-2xl bg-gradient-to-br from-green-600 to-emerald-500 p-5 text-white shadow-sm transition hover:shadow-lg active:scale-[0.99]"
+      href={href}
+      className="group flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.03] transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
     >
-      <HeroSilhouette />
-      <div className="relative z-10">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-green-50/90">
-            次の予定
-          </p>
-          {countdown && (
-            <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold backdrop-blur-sm">
-              {countdown}
-            </span>
-          )}
+      <div className="min-w-0">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+            募集中
+          </span>
+          {groupName && <span className="truncate text-xs text-gray-400">{groupName}</span>}
         </div>
-        <h2 className="mt-2 text-xl font-bold leading-tight">{plan.title}</h2>
-        <p className="mt-1 text-sm text-green-50">
-          {groupName && `${groupName}・`}
-          {dateLabel}
+        <p className="truncate text-sm font-bold text-gray-800 group-hover:text-green-700">
+          {item.title}
         </p>
-        <p className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-white/90 transition group-hover:gap-2">
-          計画を開く →
-        </p>
+        <p className="mt-0.5 text-xs text-gray-500">{dateLabel}</p>
+
+        {/* 締切状況・定員状況 */}
+        {item.recruitment && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {isClosed ? (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                締め切り済み
+              </span>
+            ) : (
+              deadlineStatus && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${deadlineStatus.className}`}
+                >
+                  {deadlineStatus.text}
+                </span>
+              )
+            )}
+            {item.recruitment.deadline && (
+              <span className="text-xs text-gray-500">
+                締切 {formatDeadline(item.recruitment.deadline)}
+              </span>
+            )}
+            <span className="text-xs text-gray-500">
+              ・{formatCapacity(item.participantCount, item.recruitment.capacity)}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* 参加ボタン（押すと計画の詳細ページへ） */}
+      <span className="btn-primary flex-shrink-0 whitespace-nowrap">参加する →</span>
     </Link>
   )
 }

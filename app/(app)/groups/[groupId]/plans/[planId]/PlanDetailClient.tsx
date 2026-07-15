@@ -6,10 +6,16 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import { openDatePicker } from '@/lib/dateInput'
 import { createGoogleMapsSearchUrl } from '@/lib/maps'
 import { getMissingDocumentFields, type ProfileLike } from '@/lib/profileCompleteness'
 import { useToast } from '@/components/Toast'
 import { StatusBadge } from '@/components/StatusBadge'
+import {
+  getPlanPhase,
+  isRecruitmentClosed,
+  type PlanPhase,
+} from '@/lib/recruitmentStatus'
 
 type Group = {
   id: string
@@ -91,6 +97,9 @@ type Preparation = {
   } | null
 }
 
+type GearItem = { id: string; name: string }
+type CarItem = { id: string; name: string | null; capacity: number | null }
+
 type Props = {
   group: Group
   plan: Plan
@@ -99,15 +108,17 @@ type Props = {
   participants: Participant[]
   reviews: Review[]
   preparations: Preparation[]
+  myGear: GearItem[]
+  myCars: CarItem[]
   currentUserId: string
   currentUserProfile: ProfileLike | null
 }
 
-const statusOptions: { value: PlanStatus; label: string }[] = [
-  { value: 'draft', label: '下書き' },
-  { value: 'recruiting', label: '募集中' },
-  { value: 'past', label: '過去' },
-]
+/** 車の表示名（例: プリウス（5人乗り）） */
+function carLabel(car: CarItem): string {
+  const name = car.name?.trim() || '車'
+  return car.capacity != null ? `${name}（${car.capacity}人乗り）` : name
+}
 
 const scheduleSchema = z.object({
   day: z.string().optional(),
@@ -140,6 +151,8 @@ export default function PlanDetailClient({
   participants,
   reviews,
   preparations,
+  myGear,
+  myCars,
   currentUserId,
   currentUserProfile,
 }: Props) {
@@ -148,6 +161,11 @@ export default function PlanDetailClient({
   const toast = useToast()
   const isCreator = plan.creator_id === currentUserId
   const missingProfileFields = getMissingDocumentFields(currentUserProfile)
+  // 参加直後に持ち物・車を登録してもらうモーダル
+  const [showPrepModal, setShowPrepModal] = useState(false)
+  const [selectedGearIds, setSelectedGearIds] = useState<string[]>([])
+  const [selectedCarIds, setSelectedCarIds] = useState<string[]>([])
+  const [prepSaving, setPrepSaving] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState<PlanStatus | null>(null)
   const [updatingTransport, setUpdatingTransport] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -157,16 +175,29 @@ export default function PlanDetailClient({
     time_label: '',
     location_name: '',
     note: '',
+    // 全体で選んだ交通手段を最初から入れておく（すぐ出るように）
+    transport: plan.default_transport ?? '',
+  })
+  // 行程の編集（編集中の行程IDと、その入力内容）
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null)
+  const [editScheduleForm, setEditScheduleForm] = useState({
+    day: '',
+    time: '',
+    time_label: '',
+    location_name: '',
+    note: '',
     transport: '',
   })
   const [recruitmentForm, setRecruitmentForm] = useState({
-    type: recruitment?.type === 'deadline' ? 'deadline' : 'first_come',
+    type: recruitment?.type === 'first_come' ? 'first_come' : 'deadline',
     capacity: recruitment?.capacity != null ? String(recruitment.capacity) : '',
     deadline: toDateTimeLocalValue(recruitment?.deadline ?? null),
     is_closed: recruitment?.is_closed ?? false,
   })
   const [submitting, setSubmitting] = useState<string | null>(null)
   const [prepInput, setPrepInput] = useState('')
+  // 「共同装備（みんなで使う）」として登録するかどうか
+  const [prepShared, setPrepShared] = useState(false)
   const myReview = reviews.find((review) => review.user_id === currentUserId)
   const [reviewForm, setReviewForm] = useState({
     body: myReview?.body ?? '',
@@ -175,16 +206,21 @@ export default function PlanDetailClient({
   const myParticipant = participants.find((participant) => participant.user_id === currentUserId)
   const capacityReached =
     recruitment?.capacity != null && participants.length >= recruitment.capacity
+  // 締切は「時間締切」「先着順＆時間締切」の両方で使う
   const deadlinePassed =
-    recruitment?.type === 'deadline' &&
-    recruitment.deadline != null &&
+    recruitment?.deadline != null &&
     new Date(recruitment.deadline).getTime() < Date.now()
-  const canJoin =
-    plan.status === 'recruiting' &&
-    !recruitment?.is_closed &&
-    !capacityReached &&
-    !deadlinePassed &&
-    !myParticipant
+  // 募集が締め切られていれば「実施」、実施日を過ぎていれば「過去」に自動で移る
+  const recruitmentClosed = isRecruitmentClosed(recruitment, participants.length)
+  const phase: PlanPhase = getPlanPhase({
+    status: plan.status,
+    recruitmentClosed,
+    startDate: plan.start_date,
+    endDate: plan.end_date,
+  })
+
+  // 参加できるのは「募集中」フェーズのときだけ
+  const canJoin = phase === 'recruiting' && !myParticipant
 
   const refreshAfterMutation = () => {
     router.refresh()
@@ -282,8 +318,63 @@ export default function PlanDetailClient({
       time_label: '',
       location_name: '',
       note: '',
-      transport: '',
+      // 全体で選んだ交通手段は、次の行程でもそのまま出しておく
+      transport: plan.default_transport ?? '',
     }))
+    refreshAfterMutation()
+    setSubmitting(null)
+  }
+
+  /** 行程の編集を開始（その行の値をフォームに読み込む） */
+  const startEditSchedule = (item: ScheduleItem) => {
+    setServerError(null)
+    setEditingScheduleId(item.id)
+    setEditScheduleForm({
+      day: item.day ?? '',
+      time: item.time ? item.time.slice(0, 5) : '',
+      time_label: item.time_label ?? '',
+      location_name: item.location_name ?? '',
+      note: item.note ?? '',
+      transport: item.transport ?? '',
+    })
+  }
+
+  const saveScheduleEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!editingScheduleId) return
+
+    setServerError(null)
+
+    const parsed = scheduleSchema.safeParse(editScheduleForm)
+    if (!parsed.success) {
+      setServerError(parsed.error.issues[0]?.message ?? '行程を確認してください')
+      return
+    }
+
+    setSubmitting('schedule-edit')
+
+    const { data } = parsed
+    const { error } = await supabase
+      .from('schedule_items')
+      .update({
+        day: data.day || null,
+        time: data.time || null,
+        time_label: data.time_label || null,
+        location_name: data.location_name,
+        map_query: data.location_name,
+        note: data.note || null,
+        transport: data.transport || null,
+      })
+      .eq('id', editingScheduleId)
+
+    if (error) {
+      setServerError('行程の更新に失敗しました: ' + error.message)
+      setSubmitting(null)
+      return
+    }
+
+    setEditingScheduleId(null)
+    toast('行程を更新しました')
     refreshAfterMutation()
     setSubmitting(null)
   }
@@ -311,14 +402,26 @@ export default function PlanDetailClient({
       return
     }
 
-    if (parsed.data.type === 'first_come' && capacity == null) {
-      setServerError('先着順では定員を入力してください')
+    // どちらの方式でも締切日時は必須
+    if (!parsed.data.deadline) {
+      setServerError('締切日時を入力してください')
       setSubmitting(null)
       return
     }
 
-    if (parsed.data.type === 'deadline' && !parsed.data.deadline) {
-      setServerError('時間締切では締切日時を入力してください')
+    // datetime-local の値（ローカル時刻）を ISO（UTC）に変換して保存し、
+    // 保存⇔表示で時刻がずれないようにする（タイムゾーン対応）
+    const deadlineDate = new Date(parsed.data.deadline)
+    if (Number.isNaN(deadlineDate.getTime())) {
+      setServerError('締切日時が正しくありません')
+      setSubmitting(null)
+      return
+    }
+    const deadlineIso = deadlineDate.toISOString()
+
+    // 先着順（＆時間締切）のときだけ定員が必要
+    if (parsed.data.type === 'first_come' && capacity == null) {
+      setServerError('先着順では定員を入力してください')
       setSubmitting(null)
       return
     }
@@ -330,7 +433,7 @@ export default function PlanDetailClient({
           plan_id: plan.id,
           type: parsed.data.type,
           capacity: parsed.data.type === 'first_come' ? capacity : null,
-          deadline: parsed.data.type === 'deadline' ? parsed.data.deadline : null,
+          deadline: deadlineIso,
           is_closed: parsed.data.is_closed,
         },
         { onConflict: 'plan_id' }
@@ -372,6 +475,11 @@ export default function PlanDetailClient({
       setSubmitting(null)
       return
     }
+
+    // 参加したら、持っていく道具・出せる車の登録をその場でお願いする
+    setSelectedGearIds([])
+    setSelectedCarIds([])
+    setShowPrepModal(true)
 
     refreshAfterMutation()
     setSubmitting(null)
@@ -460,7 +568,50 @@ export default function PlanDetailClient({
     setSubmitting(null)
   }
 
+  // 募集を締め切る → 自動的に「実施」フェーズへ進む
+  const closeRecruitment = async () => {
+    if (
+      !confirm(
+        '募集を締め切りますか？\n締め切ると「実施」フェーズに進み、これ以上の参加はできなくなります。'
+      )
+    ) {
+      return
+    }
+
+    setServerError(null)
+    setSubmitting('close')
+
+    const { error } = await supabase.from('recruitments').upsert(
+      {
+        plan_id: plan.id,
+        type: recruitment?.type ?? 'deadline',
+        capacity: recruitment?.capacity ?? null,
+        deadline: recruitment?.deadline ?? null,
+        is_closed: true,
+      },
+      { onConflict: 'plan_id' }
+    )
+
+    if (error) {
+      setServerError('募集の締め切りに失敗しました: ' + error.message)
+      setSubmitting(null)
+      return
+    }
+
+    toast('募集を締め切りました。「実施」フェーズに進みます')
+    refreshAfterMutation()
+    setSubmitting(null)
+  }
+
   const duplicatePlan = async () => {
+    if (
+      !confirm(
+        'この計画を複製しますか？\n\n複製した計画は「自分の計画」タブに未公開で追加されます（日程は未設定）。\n続けて日程などを編集できます。'
+      )
+    ) {
+      return
+    }
+
     setServerError(null)
     setSubmitting('duplicate')
 
@@ -514,23 +665,19 @@ export default function PlanDetailClient({
       user_id: currentUserId,
     })
 
-    toast('計画を複製しました。日程を設定してください')
+    toast('「自分の計画」に複製しました。日程を設定してください')
     router.push(`/groups/${group.id}/plans/${created.id}/edit`)
     router.refresh()
   }
 
-  const addPreparation = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const body = prepInput.trim()
-    if (!body) return
-
+  const addPreparationRow = async (body: string, type: 'gear' | 'car' | 'shared') => {
     setServerError(null)
     setSubmitting('preparation')
 
     const { error } = await supabase.from('preparations').insert({
       plan_id: plan.id,
       user_id: currentUserId,
-      type: 'gear',
+      type,
       body,
     })
 
@@ -540,9 +687,56 @@ export default function PlanDetailClient({
       return
     }
 
-    setPrepInput('')
     refreshAfterMutation()
     setSubmitting(null)
+  }
+
+  const addPreparation = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const body = prepInput.trim()
+    if (!body) return
+    await addPreparationRow(body, prepShared ? 'shared' : 'gear')
+    setPrepInput('')
+  }
+
+  // 参加直後のモーダルで選んだ道具・車をまとめて登録する
+  const savePostJoinPreparations = async (skip: boolean) => {
+    setPrepSaving(true)
+
+    if (!skip) {
+      const rows = [
+        ...myGear
+          .filter((gear) => selectedGearIds.includes(gear.id))
+          .map((gear) => ({
+            plan_id: plan.id,
+            user_id: currentUserId,
+            type: 'gear',
+            body: gear.name,
+          })),
+        ...myCars
+          .filter((car) => selectedCarIds.includes(car.id))
+          .map((car) => ({
+            plan_id: plan.id,
+            user_id: currentUserId,
+            type: 'car',
+            body: carLabel(car),
+          })),
+      ]
+
+      if (rows.length > 0) {
+        const { error } = await supabase.from('preparations').insert(rows)
+        if (error) {
+          setServerError('持ち物の登録に失敗しました: ' + error.message)
+          setPrepSaving(false)
+          return
+        }
+        toast('持ち物・車を登録しました')
+      }
+    }
+
+    setPrepSaving(false)
+    setShowPrepModal(false)
+    refreshAfterMutation()
   }
 
   const deletePreparation = async (id: string) => {
@@ -614,17 +808,10 @@ export default function PlanDetailClient({
             onClick={duplicatePlan}
             disabled={submitting === 'duplicate'}
             className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700 disabled:opacity-50"
+            title="この計画をコピーして、自分の新しい計画（未公開）を作ります"
           >
-            {submitting === 'duplicate' ? '複製中...' : '📋 複製'}
+            {submitting === 'duplicate' ? '複製中...' : '📋 自分の計画に複製'}
           </button>
-          {isCreator && (
-            <Link
-              href={`/groups/${group.id}/plans/${plan.id}/edit`}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700"
-            >
-              ✏️ 編集
-            </Link>
-          )}
           <Link
             href={`/groups/${group.id}/plans/${plan.id}/document`}
             className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100"
@@ -635,28 +822,12 @@ export default function PlanDetailClient({
       </div>
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <StatusBadge status={plan.status} className="px-3 py-1" />
-            {isCreator && (
-              <span className="ml-2 inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
-                起案者
-              </span>
-            )}
-          </div>
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <StatusBadge status={phase} className="px-3 py-1" />
           {isCreator && (
-            <div className="flex flex-wrap gap-2">
-              {statusOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => updateStatus(option.value)}
-                  disabled={updatingStatus != null || plan.status === option.value}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700 disabled:opacity-40"
-                >
-                  {updatingStatus === option.value ? '更新中...' : option.label}
-                </button>
-              ))}
-            </div>
+            <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
+              起案者
+            </span>
           )}
         </div>
 
@@ -665,6 +836,30 @@ export default function PlanDetailClient({
             {serverError}
           </p>
         )}
+
+        {isCreator && (
+          <StatusManager
+            phase={phase}
+            updatingStatus={updatingStatus}
+            closing={submitting === 'close'}
+            editHref={`/groups/${group.id}/plans/${plan.id}/edit`}
+            onChange={updateStatus}
+            onClose={closeRecruitment}
+          />
+        )}
+
+        {/* 基本情報（何が編集されるのかが分かるよう、この見出しの横に編集ボタンを置く） */}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-gray-700">基本情報</h2>
+          {isCreator && phase !== 'past' && (
+            <Link
+              href={`/groups/${group.id}/plans/${plan.id}/edit`}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700"
+            >
+              ✏️ 基本情報を編集
+            </Link>
+          )}
+        </div>
 
         <dl className="grid gap-4 sm:grid-cols-2">
           <DetailItem label="種別" value={plan.category} />
@@ -705,7 +900,7 @@ export default function PlanDetailClient({
         </div>
       </section>
 
-      {plan.status === 'past' && (
+      {phase === 'past' && (
         <ReviewSection
           reviews={reviews}
           currentUserId={currentUserId}
@@ -746,16 +941,29 @@ export default function PlanDetailClient({
         submitting={submitting === 'schedule'}
         onSubmit={addScheduleItem}
         onDelete={(id) => deleteRow('schedule_items', id)}
+        editingId={editingScheduleId}
+        editForm={editScheduleForm}
+        setEditForm={setEditScheduleForm}
+        editSubmitting={submitting === 'schedule-edit'}
+        onStartEdit={startEditSchedule}
+        onCancelEdit={() => setEditingScheduleId(null)}
+        onSaveEdit={saveScheduleEdit}
       />
 
-      {plan.status !== 'past' && (
+      {phase !== 'past' && (
         <PreparationSection
           preparations={preparations}
           currentUserId={currentUserId}
+          isParticipant={Boolean(myParticipant)}
+          myGear={myGear}
+          myCars={myCars}
           input={prepInput}
           setInput={setPrepInput}
+          shared={prepShared}
+          setShared={setPrepShared}
           submitting={submitting === 'preparation'}
           onAdd={addPreparation}
+          onAddItem={addPreparationRow}
           onDelete={deletePreparation}
         />
       )}
@@ -776,10 +984,227 @@ export default function PlanDetailClient({
           </button>
         </section>
       )}
+
+      {/* 参加直後: 持っていく道具・出せる車を登録してもらう（なければ「なし」） */}
+      {showPrepModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="持ち物・車の登録"
+        >
+          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-base font-bold text-gray-800">持ち物・車の登録</h2>
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              参加ありがとうございます！持っていく道具と、出せる車を選んでください。
+              みんなに共有され、かぶりや不足を防げます。
+            </p>
+
+            {myGear.length === 0 && myCars.length === 0 ? (
+              <div className="mt-4 rounded-xl bg-gray-50 p-4 text-center">
+                <p className="text-sm text-gray-600">
+                  プロフィールに道具・車が登録されていません。
+                </p>
+                <Link
+                  href="/profile"
+                  className="mt-2 inline-block text-sm font-bold text-green-600 underline"
+                >
+                  プロフィールで登録する →
+                </Link>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                {myGear.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-bold text-gray-600">🎒 持っていく道具</p>
+                    <div className="space-y-1">
+                      {myGear.map((gear) => (
+                        <label
+                          key={gear.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedGearIds.includes(gear.id)}
+                            onChange={(event) =>
+                              setSelectedGearIds((current) =>
+                                event.target.checked
+                                  ? [...current, gear.id]
+                                  : current.filter((id) => id !== gear.id)
+                              )
+                            }
+                            className="h-4 w-4"
+                          />
+                          {gear.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {myCars.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-bold text-gray-600">🚗 出せる車</p>
+                    <div className="space-y-1">
+                      {myCars.map((car) => (
+                        <label
+                          key={car.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedCarIds.includes(car.id)}
+                            onChange={(event) =>
+                              setSelectedCarIds((current) =>
+                                event.target.checked
+                                  ? [...current, car.id]
+                                  : current.filter((id) => id !== car.id)
+                              )
+                            }
+                            className="h-4 w-4"
+                          />
+                          {carLabel(car)}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-5 space-y-2">
+              {(myGear.length > 0 || myCars.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => savePostJoinPreparations(false)}
+                  disabled={
+                    prepSaving ||
+                    (selectedGearIds.length === 0 && selectedCarIds.length === 0)
+                  }
+                  className="btn-primary w-full"
+                >
+                  {prepSaving ? '登録中...' : 'この内容で登録する'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => savePostJoinPreparations(true)}
+                disabled={prepSaving}
+                className="btn-secondary w-full"
+              >
+                なし（持っていかない）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
+// 状態（下書き/募集中/過去）の意味を説明し、次にとる操作を分かりやすく提示する
+// 計画の状態は一方向にだけ進む（不可逆）:
+//   未公開 →（募集開始）→ 募集中 →（締め切り/締切日時/定員）→ 実施 →（実施日経過）→ 過去
+// 戻す操作は用意しない。各フェーズで「次にやること」だけを提示する。
+function StatusManager({
+  phase,
+  updatingStatus,
+  closing,
+  editHref,
+  onChange,
+  onClose,
+}: {
+  phase: PlanPhase
+  updatingStatus: PlanStatus | null
+  closing: boolean
+  editHref: string
+  onChange: (status: PlanStatus) => void
+  onClose: () => void
+}) {
+  const busy = updatingStatus != null || closing
+
+  if (phase === 'draft') {
+    return (
+      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <p className="text-sm font-bold text-amber-800">この計画は「未公開」です</p>
+        <p className="mt-1 text-xs leading-5 text-amber-700">
+          未公開の計画は<strong>あなただけ</strong>が見られます（「自分の計画」タブにあります）。
+          募集を開始すると、グループ全員に公開され、メンバーが参加できるようになります。
+        </p>
+        <p className="mt-2 text-xs text-amber-700">
+          進み方：<strong>未公開 → 募集中 → 実施 → 過去</strong>（戻すことはできません）
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onChange('recruiting')}
+            disabled={busy}
+            className="btn-primary"
+          >
+            {updatingStatus === 'recruiting' ? '公開中...' : '📣 募集を開始する（グループに公開）'}
+          </button>
+          <Link href={editHref} className="btn-secondary">
+            ✏️ 基本情報を編集
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (phase === 'recruiting') {
+    return (
+      <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4">
+        <p className="text-sm font-bold text-green-800">「募集中」です（グループに公開中）</p>
+        <p className="mt-1 text-xs leading-5 text-green-700">
+          メンバーが参加できます。締切日時を過ぎるか、定員に達するか、下の「募集を締め切る」を押すと、
+          自動的に<strong>「実施」</strong>フェーズへ進みます。
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href={editHref} className="btn-secondary">
+            ✏️ 内容を再編集
+          </Link>
+          <button type="button" onClick={onClose} disabled={busy} className="btn-primary">
+            {closing ? '締め切り中...' : '🔒 募集を締め切る'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (phase === 'in_progress') {
+    return (
+      <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+        <p className="text-sm font-bold text-indigo-800">「実施」フェーズです</p>
+        <p className="mt-1 text-xs leading-5 text-indigo-700">
+          募集は締め切られ、参加者が確定しました。当日に向けて、行程や持ち物を確認しましょう。
+          <strong>実施日（終了日）を過ぎると、自動的に「過去」へ移ります。</strong>
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href={editHref} className="btn-secondary">
+            ✏️ 内容を再編集
+          </Link>
+          <button
+            type="button"
+            onClick={() => onChange('past')}
+            disabled={busy}
+            className="btn-secondary"
+          >
+            {updatingStatus === 'past' ? '更新中...' : '活動を終えた（今すぐ「過去」にする）'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50 p-4">
+      <p className="text-sm font-bold text-sky-800">「過去」の計画です</p>
+      <p className="mt-1 text-xs leading-5 text-sky-700">
+        実施日を過ぎた（または終了した）計画です。ふりかえり（感想・費用）を記録できます。
+      </p>
+    </div>
+  )
+}
 function RecruitmentSection({
   recruitment,
   participants,
@@ -830,11 +1255,8 @@ function RecruitmentSection({
         <div className="grid gap-4 sm:grid-cols-3">
           <DetailItem label="募集方式" value={recruitmentTypeLabel(recruitment?.type)} />
           <DetailItem label="参加人数" value={participantCountText} />
-          {recruitment?.type === 'deadline' && (
-            <DetailItem
-              label="締切"
-              value={recruitment.deadline ? formatDateTime(recruitment.deadline) : null}
-            />
+          {recruitment?.deadline != null && (
+            <DetailItem label="締切" value={formatDateTime(recruitment.deadline)} />
           )}
         </div>
 
@@ -918,39 +1340,48 @@ function RecruitmentSection({
         {isCreator && (
           <form onSubmit={onSave} className="space-y-3 border-t border-gray-100 pt-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <select
-                value={form.type}
-                onChange={(event) => {
-                  const type = event.target.value
-                  setForm((current) => ({
-                    ...current,
-                    type,
-                    capacity: type === 'first_come' ? current.capacity : '',
-                    deadline: type === 'deadline' ? current.deadline : '',
-                  }))
-                }}
-                className={inputClass}
-              >
-                <option value="first_come">先着順</option>
-                <option value="deadline">時間締切</option>
-              </select>
-              {form.type === 'first_come' ? (
-                <input
-                  type="number"
-                  min={1}
-                  value={form.capacity}
-                  onChange={(event) => setForm((current) => ({ ...current, capacity: event.target.value }))}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">募集方式</label>
+                <select
+                  value={form.type}
+                  onChange={(event) => {
+                    const type = event.target.value
+                    setForm((current) => ({
+                      ...current,
+                      type,
+                      // 締切は両方式で使うので残す。定員は先着順のときだけ
+                      capacity: type === 'first_come' ? current.capacity : '',
+                    }))
+                  }}
                   className={inputClass}
-                  placeholder="定員"
-                />
-              ) : (
-                <input
-                  type="datetime-local"
-                  value={form.deadline}
-                  onChange={(event) => setForm((current) => ({ ...current, deadline: event.target.value }))}
-                  className={inputClass}
-                />
+                >
+                  <option value="deadline">時間締切</option>
+                  <option value="first_come">先着順＆時間締切</option>
+                </select>
+              </div>
+              {form.type === 'first_come' && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">定員（先着人数）</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.capacity}
+                    onChange={(event) => setForm((current) => ({ ...current, capacity: event.target.value }))}
+                    className={inputClass}
+                    placeholder="例: 10"
+                  />
+                </div>
               )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">締切日時</label>
+              <input
+                type="datetime-local"
+                onClick={openDatePicker}
+                value={form.deadline}
+                onChange={(event) => setForm((current) => ({ ...current, deadline: event.target.value }))}
+                className={inputClass}
+              />
             </div>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input
@@ -977,20 +1408,49 @@ function RecruitmentSection({
 function PreparationSection({
   preparations,
   currentUserId,
+  isParticipant,
+  myGear,
+  myCars,
   input,
   setInput,
+  shared,
+  setShared,
   submitting,
   onAdd,
+  onAddItem,
   onDelete,
 }: {
   preparations: Preparation[]
   currentUserId: string
+  isParticipant: boolean
+  myGear: GearItem[]
+  myCars: CarItem[]
   input: string
   setInput: React.Dispatch<React.SetStateAction<string>>
+  shared: boolean
+  setShared: React.Dispatch<React.SetStateAction<boolean>>
   submitting: boolean
   onAdd: (event: React.FormEvent<HTMLFormElement>) => void
+  onAddItem: (body: string, type: 'gear' | 'car' | 'shared') => void
   onDelete: (id: string) => void
 }) {
+  // すでに自分が登録した内容は、クイック追加の候補から外す
+  const myBodies = new Set(
+    preparations.filter((p) => p.user_id === currentUserId).map((p) => p.body ?? '')
+  )
+  const gearChips = myGear.filter((gear) => !myBodies.has(gear.name))
+  const carChips = myCars.filter((car) => !myBodies.has(carLabel(car)))
+
+  // 共同装備 / 個人の持ち物 / 車 に分けて表示する
+  const sharedItems = preparations.filter((p) => p.type === 'shared')
+  const personalItems = preparations.filter((p) => p.type !== 'shared' && p.type !== 'car')
+  const carItems = preparations.filter((p) => p.type === 'car')
+  const groups: { title: string; icon: string; items: Preparation[] }[] = [
+    { title: '共同装備（みんなで使う）', icon: '🤝', items: sharedItems },
+    { title: '個人の持ち物', icon: '🎒', items: personalItems },
+    { title: '出せる車', icon: '🚗', items: carItems },
+  ].filter((entry) => entry.items.length > 0)
+
   return (
     <section className="rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.03]">
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
@@ -1008,55 +1468,140 @@ function PreparationSection({
             まだ登録がありません。最初のひとつを追加しましょう。
           </p>
         ) : (
-          <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
-            {preparations.map((prep) => (
-              <li key={prep.id} className="flex items-center gap-3 px-3 py-2.5">
-                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200">
-                  {prep.profiles?.avatar_url ? (
-                    <Image
-                      src={prep.profiles.avatar_url}
-                      alt=""
-                      width={28}
-                      height={28}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-xs text-gray-400">👤</span>
-                  )}
-                </div>
-                <span className="min-w-0 flex-1 truncate text-sm text-gray-800">{prep.body}</span>
-                <span className="flex-shrink-0 text-xs text-gray-400">
-                  {prep.profiles?.name ?? '名前未設定'}
-                </span>
-                {prep.user_id === currentUserId && (
-                  <button
-                    type="button"
-                    onClick={() => onDelete(prep.id)}
-                    className="flex-shrink-0 text-xs font-semibold text-red-500 hover:text-red-700"
-                  >
-                    削除
-                  </button>
-                )}
-              </li>
+          <div className="space-y-3">
+            {groups.map((entry) => (
+              <div key={entry.title}>
+                <p className="mb-1.5 text-xs font-bold text-gray-600">
+                  <span aria-hidden className="mr-1">
+                    {entry.icon}
+                  </span>
+                  {entry.title}（{entry.items.length}）
+                </p>
+                <ul
+                  className={`divide-y divide-gray-100 rounded-xl border ${
+                    entry.title.startsWith('共同装備')
+                      ? 'border-green-200 bg-green-50/40'
+                      : 'border-gray-100'
+                  }`}
+                >
+                  {entry.items.map((prep) => (
+                    <li key={prep.id} className="flex items-center gap-3 px-3 py-2.5">
+                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200">
+                        {prep.profiles?.avatar_url ? (
+                          <Image
+                            src={prep.profiles.avatar_url}
+                            alt=""
+                            width={28}
+                            height={28}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400">👤</span>
+                        )}
+                      </div>
+                      <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
+                        {prep.body}
+                      </span>
+                      <span className="flex-shrink-0 text-xs text-gray-400">
+                        {prep.profiles?.name ?? '名前未設定'}
+                      </span>
+                      {prep.user_id === currentUserId && (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(prep.id)}
+                          className="flex-shrink-0 text-xs font-semibold text-red-500 hover:text-red-700"
+                        >
+                          削除
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
 
-        <form onSubmit={onAdd} className="flex gap-2">
-          <input
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            className={`${inputClass} flex-1`}
-            placeholder="例: テント（4人用）、ランタン"
-          />
-          <button
-            type="submit"
-            disabled={submitting || input.trim() === ''}
-            className="btn-primary flex-shrink-0"
-          >
-            {submitting ? '追加中...' : '追加'}
-          </button>
-        </form>
+        {/* 登録できるのは参加者だけ */}
+        {!isParticipant ? (
+          <p className="rounded-lg bg-gray-50 px-4 py-3 text-center text-xs text-gray-500">
+            持ち物・車を登録できるのは、この計画に参加したメンバーだけです。
+          </p>
+        ) : (
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            {/* プロフィールに登録済みの道具・車からクイック追加 */}
+            {(gearChips.length > 0 || carChips.length > 0) && (
+              <div>
+                <p className="mb-1.5 text-xs font-bold text-gray-600">
+                  プロフィールの登録から追加
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {gearChips.map((gear) => (
+                    <button
+                      key={gear.id}
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => onAddItem(gear.name, shared ? 'shared' : 'gear')}
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
+                    >
+                      ＋ {shared ? '🤝' : '🎒'} {gear.name}
+                    </button>
+                  ))}
+                  {carChips.map((car) => (
+                    <button
+                      key={car.id}
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => onAddItem(carLabel(car), 'car')}
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
+                    >
+                      ＋ 🚗 {carLabel(car)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {myGear.length === 0 && myCars.length === 0 && (
+              <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                プロフィールに道具・車がまだ登録されていません。
+                <Link href="/profile" className="ml-1 font-bold text-green-600 underline">
+                  プロフィールで登録する
+                </Link>
+              </p>
+            )}
+
+            {/* 共同装備として登録するかどうか（上のチップにも適用される） */}
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={shared}
+                onChange={(event) => setShared(event.target.checked)}
+                className="h-4 w-4"
+              />
+              <span>
+                <strong>🤝 共同装備として登録</strong>（テントや鍋など、みんなで使う物）
+              </span>
+            </label>
+
+            {/* 登録にないものは自由入力で追加 */}
+            <form onSubmit={onAdd} className="flex gap-2">
+              <input
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                className={`${inputClass} flex-1`}
+                placeholder={shared ? '共同装備（例: テント、大鍋）' : 'その他（例: ランタン、まな板）'}
+              />
+              <button
+                type="submit"
+                disabled={submitting || input.trim() === ''}
+                className="btn-primary flex-shrink-0"
+              >
+                {submitting ? '追加中...' : '追加'}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </section>
   )
@@ -1212,6 +1757,13 @@ function ScheduleSection({
   submitting,
   onSubmit,
   onDelete,
+  editingId,
+  editForm,
+  setEditForm,
+  editSubmitting,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
 }: {
   items: ScheduleItem[]
   defaultTransport: string | null
@@ -1235,6 +1787,27 @@ function ScheduleSection({
   submitting: boolean
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   onDelete: (id: string) => void
+  editingId: string | null
+  editForm: {
+    day: string
+    time: string
+    time_label: string
+    location_name: string
+    note: string
+    transport: string
+  }
+  setEditForm: React.Dispatch<React.SetStateAction<{
+    day: string
+    time: string
+    time_label: string
+    location_name: string
+    note: string
+    transport: string
+  }>>
+  editSubmitting: boolean
+  onStartEdit: (item: ScheduleItem) => void
+  onCancelEdit: () => void
+  onSaveEdit: (event: React.FormEvent<HTMLFormElement>) => void
 }) {
   const availableTimeOptions = getAvailableScheduleTimeOptions(items, form.day)
   const groupedItems = groupScheduleItemsByDay(items)
@@ -1260,6 +1833,115 @@ function ScheduleSection({
                     item.time_label,
                   ].filter(Boolean).join(' ')
                   const transport = item.transport || defaultTransport
+
+                  // 編集中の行は、その場でフォームに切り替える
+                  if (editingId === item.id) {
+                    return (
+                      <form
+                        key={item.id}
+                        onSubmit={onSaveEdit}
+                        className="space-y-3 bg-green-50/40 px-4 py-4"
+                      >
+                        <p className="text-xs font-bold text-gray-600">行程を編集</p>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <input
+                            type="date"
+                            onClick={openDatePicker}
+                            value={editForm.day}
+                            onChange={(event) =>
+                              setEditForm((current) => ({ ...current, day: event.target.value }))
+                            }
+                            className={inputClass}
+                          />
+                          <select
+                            value={editForm.time}
+                            onChange={(event) =>
+                              setEditForm((current) => ({ ...current, time: event.target.value }))
+                            }
+                            className={inputClass}
+                          >
+                            <option value="">時刻未定</option>
+                            {timeOptions.map((time) => (
+                              <option key={time} value={time}>
+                                {time}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={editForm.time_label}
+                            onChange={(event) =>
+                              setEditForm((current) => ({
+                                ...current,
+                                time_label: event.target.value,
+                              }))
+                            }
+                            className={inputClass}
+                          >
+                            <option value="">ラベルなし</option>
+                            {scheduleLabels.map((label) => (
+                              <option key={label} value={label}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <input
+                          value={editForm.location_name}
+                          onChange={(event) =>
+                            setEditForm((current) => ({
+                              ...current,
+                              location_name: event.target.value,
+                            }))
+                          }
+                          className={inputClass}
+                          placeholder="場所名"
+                        />
+                        <textarea
+                          value={editForm.note}
+                          onChange={(event) =>
+                            setEditForm((current) => ({ ...current, note: event.target.value }))
+                          }
+                          className={`${inputClass} min-h-16 resize-y`}
+                          placeholder="この場所の注釈（任意）"
+                        />
+                        <select
+                          value={editForm.transport}
+                          onChange={(event) =>
+                            setEditForm((current) => ({
+                              ...current,
+                              transport: event.target.value,
+                            }))
+                          }
+                          className={inputClass}
+                        >
+                          <option value="">
+                            全体の交通手段を使う{defaultTransport ? `（${defaultTransport}）` : '（未定）'}
+                          </option>
+                          {transportOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            disabled={editSubmitting}
+                            className="btn-primary flex-1"
+                          >
+                            {editSubmitting ? '保存中...' : '変更を保存'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onCancelEdit}
+                            className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+                          >
+                            キャンセル
+                          </button>
+                        </div>
+                      </form>
+                    )
+                  }
 
                   return (
                     <div key={item.id} className="px-4 py-4">
@@ -1294,12 +1976,20 @@ function ScheduleSection({
                             </a>
                           )}
                           {isCreator && (
-                            <button
-                              onClick={() => onDelete(item.id)}
-                              className="text-xs font-semibold text-red-500 hover:text-red-700"
-                            >
-                              削除
-                            </button>
+                            <>
+                              <button
+                                onClick={() => onStartEdit(item)}
+                                className="text-xs font-semibold text-gray-500 hover:text-green-700"
+                              >
+                                編集
+                              </button>
+                              <button
+                                onClick={() => onDelete(item.id)}
+                                className="text-xs font-semibold text-red-500 hover:text-red-700"
+                              >
+                                削除
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -1317,6 +2007,7 @@ function ScheduleSection({
           <div className="grid gap-3 sm:grid-cols-3">
             <input
               type="date"
+              onClick={openDatePicker}
               value={form.day}
               onChange={(event) => setForm((current) => ({
                 ...current,
@@ -1412,7 +2103,7 @@ function DetailItem({ label, value }: { label: string; value: string | null | un
 }
 
 function recruitmentTypeLabel(value: string | null | undefined) {
-  if (value === 'first_come') return '先着順'
+  if (value === 'first_come') return '先着順＆時間締切'
   if (value === 'deadline') return '時間締切'
   return '未設定'
 }

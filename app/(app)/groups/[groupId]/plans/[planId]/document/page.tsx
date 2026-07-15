@@ -96,20 +96,26 @@ export default async function PlanDocumentPage({
       : participant.profiles,
   }))
 
-  // 代表者 = グループの部長（いなければ起案者）
+  // 代表者に選べる候補（グループのメンバー全員のプロフィール）
+  const memberIds = (groupMembers ?? []).map((member) => member.user_id)
+  const { data: memberProfiles } =
+    memberIds.length > 0
+      ? await supabase.from('profiles').select(profileColumns).in('id', memberIds)
+      : { data: [] }
+
+  const profileById = new Map((memberProfiles ?? []).map((p) => [p.id, p]))
+
+  // 既定の代表者: 保存済み → 部長（複数いれば先頭）→ 起案者
   const leaderId = (groupMembers ?? []).find(
     (member) => member.position === '部長'
   )?.user_id
 
-  let leaderProfile = creatorProfile
-  if (leaderId && leaderId !== plan.creator_id) {
-    const { data } = await supabase
-      .from('profiles')
-      .select(profileColumns)
-      .eq('id', leaderId)
-      .single()
-    if (data) leaderProfile = data
-  }
+  const defaultRepresentativeId =
+    planDocument?.representative_user_id ?? leaderId ?? plan.creator_id ?? null
+
+  const leaderProfile =
+    (defaultRepresentativeId ? profileById.get(defaultRepresentativeId) : null) ??
+    creatorProfile
 
   return (
     <DocumentClient
@@ -121,6 +127,8 @@ export default async function PlanDocumentPage({
         user_id: member.user_id,
         position: member.position ?? '部員',
       }))}
+      memberProfiles={memberProfiles ?? []}
+      defaultRepresentativeId={defaultRepresentativeId}
       planDocument={planDocument}
       creatorProfile={creatorProfile}
       leaderProfile={leaderProfile}

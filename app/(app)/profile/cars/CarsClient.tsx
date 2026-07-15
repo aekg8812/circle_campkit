@@ -111,8 +111,12 @@ export default function CarsClient({ initialCars, userId }: Props) {
             <Field label="乗車人数 *" error={errors.capacity?.message}>
               <input {...register('capacity', { valueAsNumber: true })} type="number" min={1} className={inputClass} placeholder="5" />
             </Field>
-            <Field label="積載量（自由記述）" error={errors.luggage_capacity?.message}>
-              <input {...register('luggage_capacity')} className={inputClass} placeholder="トランク中サイズ2個" />
+            <Field label="積載量（荷物をどれくらい積めるか）" error={errors.luggage_capacity?.message}>
+              <input
+                {...register('luggage_capacity')}
+                className={inputClass}
+                placeholder="例）スーツケース2個ぶん / 大きめのバッグ3個"
+              />
             </Field>
             <div className="flex gap-2 pt-1">
               <button

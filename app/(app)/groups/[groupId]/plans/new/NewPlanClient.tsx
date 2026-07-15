@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import { openDatePicker } from '@/lib/dateInput'
 
 type Group = {
   id: string
@@ -22,7 +23,6 @@ const schema = z
   .object({
     title: z.string().min(1, '行事名を入力してください'),
     category: z.string().optional().nullable(),
-    status: z.enum(['draft', 'recruiting']),
     start_date: z.string().optional().nullable(),
     end_date: z.string().optional().nullable(),
     area: z.string().optional().nullable(),
@@ -52,7 +52,6 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
     defaultValues: {
       title: '',
       category: 'キャンプ',
-      status: 'draft',
       start_date: '',
       end_date: '',
       area: '',
@@ -70,7 +69,9 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
         creator_id: currentUserId,
         title: data.title,
         category: data.category || null,
-        status: data.status,
+        // 状態は選ばせず、必ず未公開として即保存する。
+        // グループへの公開は、計画詳細の「募集を開始する」ボタンで行う。
+        status: 'draft',
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         area: data.area || null,
@@ -136,20 +137,14 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
               </select>
             </Field>
 
-            <Field label="状態" error={errors.status?.message}>
-              <select {...register('status')} className={inputClass}>
-                <option value="draft">下書き</option>
-                <option value="recruiting">募集として公開</option>
-              </select>
-            </Field>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="開始日" error={errors.start_date?.message}>
-              <input {...register('start_date')} type="date" className={inputClass} />
+              <input {...register('start_date')} type="date" onClick={openDatePicker} className={inputClass} />
             </Field>
             <Field label="終了日" error={errors.end_date?.message}>
-              <input {...register('end_date')} type="date" className={inputClass} />
+              <input {...register('end_date')} type="date" onClick={openDatePicker} className={inputClass} />
             </Field>
           </div>
 
@@ -164,6 +159,11 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
               placeholder="活動内容やメンバーへの補足を書きます"
             />
           </Field>
+
+          <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs leading-5 text-gray-500">
+            作成するとそのまま保存され、「自分の計画」に入ります（この時点ではまだグループに公開されません）。
+            グループへの公開は、計画の詳細画面の「📣 募集を開始する」から行えます。
+          </p>
 
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3">
             {isSubmitting ? '作成中...' : '計画を作成'}
