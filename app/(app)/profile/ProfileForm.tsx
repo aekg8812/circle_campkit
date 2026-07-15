@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useToast } from '@/components/Toast'
 
@@ -41,11 +42,13 @@ type Profile = {
 type Props = {
   profile: Profile | null
   userId: string
+  redirectHomeOnSave?: boolean
 }
 
-export default function ProfileForm({ profile, userId }: Props) {
+export default function ProfileForm({ profile, userId, redirectHomeOnSave = false }: Props) {
   const supabase = createClient()
   const toast = useToast()
+  const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null)
   const [uploading, setUploading] = useState(false)
@@ -108,6 +111,11 @@ export default function ProfileForm({ profile, userId }: Props) {
       return
     }
     toast('プロフィールを保存しました')
+    // 新規登録直後（オンボーディング）のときだけ、保存後にホームへ遷移
+    if (redirectHomeOnSave) {
+      router.push('/home')
+      router.refresh()
+    }
   }
 
   return (

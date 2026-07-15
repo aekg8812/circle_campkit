@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import { openDatePicker } from '@/lib/dateInput'
 
 type Group = {
   id: string
@@ -135,10 +136,10 @@ export default function EditPlanClient({ group, plan }: Props) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="開始日" error={errors.start_date?.message}>
-              <input {...register('start_date')} type="date" className={inputClass} />
+              <input {...register('start_date')} type="date" onClick={openDatePicker} className={inputClass} />
             </Field>
             <Field label="終了日" error={errors.end_date?.message}>
-              <input {...register('end_date')} type="date" className={inputClass} />
+              <input {...register('end_date')} type="date" onClick={openDatePicker} className={inputClass} />
             </Field>
           </div>
 

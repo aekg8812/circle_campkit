@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { openDatePicker } from '@/lib/dateInput'
 import {
   DEFAULT_RECIPIENT,
   ROSTER_FOOTNOTE,
@@ -75,6 +76,8 @@ type Props = {
   scheduleItems: ScheduleItem[]
   participants: Participant[]
   memberPositions: { user_id: string; position: string }[]
+  memberProfiles: ProfileRow[]
+  defaultRepresentativeId: string | null
   planDocument: PlanDocumentRow | null
   creatorProfile: ProfileRow | null
   leaderProfile: ProfileRow | null
@@ -99,6 +102,8 @@ export default function DocumentClient({
   scheduleItems,
   participants,
   memberPositions,
+  memberProfiles,
+  defaultRepresentativeId,
   planDocument,
   creatorProfile,
   leaderProfile,
@@ -106,9 +111,14 @@ export default function DocumentClient({
 }: Props) {
   const supabase = createClient()
   const toast = useToast()
-  const isCreator = plan.creator_id === currentUserId
+  // 計画書はグループのメンバーなら誰でも編集できる（分担して入力できるように）
+  const canEdit = true
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [representativeId, setRepresentativeId] = useState<string | null>(
+    defaultRepresentativeId
+  )
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
   const [form, setForm] = useState<PlanDocumentFormValues>({
     created_date: planDocument?.created_date ?? todayIso(),
@@ -135,7 +145,11 @@ export default function DocumentClient({
     const positions = new Map(
       memberPositions.map((member) => [member.user_id, member.position])
     )
-    const representative = leaderProfile ?? creatorProfile
+    // 代表者はフォームで選べる（部長が複数いる場合に誰を載せるか明示できる）
+    const representative =
+      memberProfiles.find((profile) => profile.id === representativeId) ??
+      leaderProfile ??
+      creatorProfile
 
     return {
       createdDateLabel: formatWareki(form.created_date),
@@ -164,7 +178,18 @@ export default function DocumentClient({
       notes: form.notes,
       roster: buildRoster(participants, positions),
     }
-  }, [form, group, plan, scheduleItems, participants, memberPositions, creatorProfile, leaderProfile])
+  }, [
+    form,
+    group,
+    plan,
+    scheduleItems,
+    participants,
+    memberPositions,
+    memberProfiles,
+    representativeId,
+    creatorProfile,
+    leaderProfile,
+  ])
 
   // 参加者ごとに、名簿で空欄になる項目を洗い出す（提出前チェック）
   const incompleteParticipants = participants
@@ -195,6 +220,7 @@ export default function DocumentClient({
         hospital_phone: form.hospital_phone || null,
         hospital_distance: form.hospital_distance || null,
         notes: form.notes || null,
+        representative_user_id: representativeId,
       },
       { onConflict: 'plan_id' }
     )
@@ -208,6 +234,35 @@ export default function DocumentClient({
 
     toast('計画書の内容を保存しました')
     setSaving(false)
+  }
+
+  /** ファイルをダウンロードさせる共通処理 */
+  const saveBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Excel（1ファイル・2シート：計画書／参加者名簿）
+  const downloadExcel = async () => {
+    setMessage(null)
+    setExporting(true)
+    try {
+      const { generatePlanDocumentExcel } = await import('@/lib/excel/planDocumentExcel')
+      const blob = await generatePlanDocumentExcel(documentData)
+      saveBlob(blob, `計画書_${plan.title || 'plan'}.xlsx`)
+      toast('Excelを作成しました')
+    } catch (error) {
+      const text =
+        'Excelの生成に失敗しました: ' +
+        (error instanceof Error ? error.message : String(error))
+      setMessage({ type: 'error', text })
+      toast('Excelの生成に失敗しました', 'error')
+    }
+    setExporting(false)
   }
 
   const downloadPdf = async () => {
@@ -284,6 +339,14 @@ export default function DocumentClient({
           <button type="button" onClick={() => window.print()} className="btn-secondary">
             印刷
           </button>
+          <button
+            type="button"
+            onClick={downloadExcel}
+            disabled={exporting}
+            className="btn-secondary"
+          >
+            {exporting ? 'Excelを生成中...' : '📊 Excelで出力'}
+          </button>
           <button type="button" onClick={downloadPdf} disabled={generating} className="btn-primary">
             {generating ? 'PDFを生成中...' : '計画書を作成する（PDF）'}
           </button>
@@ -331,24 +394,50 @@ export default function DocumentClient({
       )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] print:block">
-        {/* 入力フォーム（起案者のみ編集可） */}
+        {/* 入力フォーム（グループのメンバーなら誰でも編集できる） */}
         <section className="space-y-5 self-start rounded-2xl bg-white p-5 shadow-sm print:hidden">
           <div>
-            <h2 className="text-sm font-bold text-gray-700">起案者が入力する項目</h2>
+            <h2 className="text-sm font-bold text-gray-700">手入力する項目</h2>
             <p className="mt-1 text-xs text-gray-500">
               行事名・日程・参加者名簿などは計画と参加者のプロフィールから自動反映されます。
-              {!isCreator && ' （閲覧のみ・保存は起案者だけができます）'}
+              グループのメンバーなら<strong>誰でも編集・保存できます</strong>（分担して入力できます）。
             </p>
           </div>
+
+          <FormBlock title="代表者">
+            <Field label="計画書に載せる代表者">
+              <select
+                value={representativeId ?? ''}
+                onChange={(event) => setRepresentativeId(event.target.value || null)}
+                className={inputClass}
+                disabled={!canEdit}
+              >
+                {memberProfiles.length === 0 && <option value="">（メンバーがいません）</option>}
+                {memberProfiles.map((profile) => {
+                  const position =
+                    memberPositions.find((m) => m.user_id === profile.id)?.position ?? '部員'
+                  return (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}（{position}）
+                    </option>
+                  )
+                })}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                部長が複数いる場合も、ここで誰を代表者にするか選べます。
+              </p>
+            </Field>
+          </FormBlock>
 
           <FormBlock title="基本">
             <Field label="計画書の作成日">
               <input
                 type="date"
+                onClick={openDatePicker}
                 value={form.created_date}
                 onChange={(event) => setField('created_date', event.target.value)}
                 className={inputClass}
-                disabled={!isCreator}
+                disabled={!canEdit}
               />
             </Field>
             <Field label="宛先">
@@ -356,7 +445,7 @@ export default function DocumentClient({
                 value={form.recipient}
                 onChange={(event) => setField('recipient', event.target.value)}
                 className={inputClass}
-                disabled={!isCreator}
+                disabled={!canEdit}
               />
             </Field>
           </FormBlock>
@@ -368,7 +457,7 @@ export default function DocumentClient({
                 onChange={(event) => setField('advisor_name', event.target.value)}
                 className={inputClass}
                 placeholder="記入例) 山田 太郎"
-                disabled={!isCreator}
+                disabled={!canEdit}
               />
             </Field>
             <Field label="所属等">
@@ -377,7 +466,7 @@ export default function DocumentClient({
                 onChange={(event) => setField('advisor_affiliation', event.target.value)}
                 className={inputClass}
                 placeholder="記入例) ○○研究院○○研究系"
-                disabled={!isCreator}
+                disabled={!canEdit}
               />
             </Field>
             <Field label="TEL">
@@ -386,7 +475,7 @@ export default function DocumentClient({
                 onChange={(event) => setField('advisor_phone', event.target.value)}
                 className={inputClass}
                 placeholder="記入例) 050-1234-5678"
-                disabled={!isCreator}
+                disabled={!canEdit}
               />
             </Field>
           </FormBlock>
@@ -398,7 +487,7 @@ export default function DocumentClient({
                 onChange={(event) => setField('lodging_address', event.target.value)}
                 className={inputClass}
                 placeholder="記入例) 〒000-0000 ○○県○○市○○町1-2-3"
-                disabled={!isCreator}
+                disabled={!canEdit}
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
@@ -408,7 +497,7 @@ export default function DocumentClient({
                   onChange={(event) => setField('lodging_name', event.target.value)}
                   className={inputClass}
                   placeholder="記入例) ○○キャンプ場"
-                  disabled={!isCreator}
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="TEL">
@@ -417,7 +506,7 @@ export default function DocumentClient({
                   onChange={(event) => setField('lodging_phone', event.target.value)}
                   className={inputClass}
                   placeholder="記入例) 0120-12-3456"
-                  disabled={!isCreator}
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
@@ -430,7 +519,7 @@ export default function DocumentClient({
                 onChange={(event) => setField('transport_note', event.target.value)}
                 className={inputClass}
                 placeholder="記入例) 車2台"
-                disabled={!isCreator}
+                disabled={!canEdit}
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
@@ -440,7 +529,7 @@ export default function DocumentClient({
                   onChange={(event) => setField('hospital_name', event.target.value)}
                   className={inputClass}
                   placeholder="記入例) ○○病院"
-                  disabled={!isCreator}
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="TEL">
@@ -449,7 +538,7 @@ export default function DocumentClient({
                   onChange={(event) => setField('hospital_phone', event.target.value)}
                   className={inputClass}
                   placeholder="記入例) 092-123-4567"
-                  disabled={!isCreator}
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
@@ -460,7 +549,7 @@ export default function DocumentClient({
                   onChange={(event) => setField('hospital_distance', event.target.value)}
                   className={inputClass}
                   placeholder="記入例) 車10分"
-                  disabled={!isCreator}
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="住所（任意）">
@@ -468,7 +557,7 @@ export default function DocumentClient({
                   value={form.hospital_address}
                   onChange={(event) => setField('hospital_address', event.target.value)}
                   className={inputClass}
-                  disabled={!isCreator}
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
@@ -480,11 +569,11 @@ export default function DocumentClient({
               onChange={(event) => setField('notes', event.target.value)}
               className={`${inputClass} min-h-20 resize-y`}
               placeholder="記入例) 雨天時は中止し、後日改めて実施予定"
-              disabled={!isCreator}
+              disabled={!canEdit}
             />
           </FormBlock>
 
-          {isCreator && (
+          {canEdit && (
             <button type="button" onClick={saveDocument} disabled={saving} className="btn-primary w-full">
               {saving ? '保存中...' : '入力内容を保存'}
             </button>

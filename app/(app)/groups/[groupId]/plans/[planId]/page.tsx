@@ -66,6 +66,8 @@ export default async function PlanDetailPage({
     { data: participants },
     { data: reviews },
     { data: preparations },
+    { data: myGear },
+    { data: myCars },
   ] = await Promise.all([
     supabase
       .from('schedule_items')
@@ -94,6 +96,16 @@ export default async function PlanDetailPage({
       .select('id, user_id, type, body, created_at, profiles(name, avatar_url)')
       .eq('plan_id', planId)
       .order('created_at', { ascending: true }),
+    supabase
+      .from('gear')
+      .select('id, name')
+      .eq('owner_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('cars')
+      .select('id, name, capacity')
+      .eq('owner_id', user.id)
+      .order('created_at', { ascending: false }),
   ])
 
   const normalizedReviews = (reviews ?? []).map((review) => ({
@@ -131,6 +143,8 @@ export default async function PlanDetailPage({
       participants={normalizedParticipants}
       reviews={normalizedReviews}
       preparations={normalizedPreparations}
+      myGear={myGear ?? []}
+      myCars={myCars ?? []}
       currentUserId={user.id}
       currentUserProfile={currentUserProfile}
     />
