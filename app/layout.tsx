@@ -1,6 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
+// スマホ・PCで画面幅にきちんと合わせる（横方向にはみ出して極端に拡大されるのを防ぐ）
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

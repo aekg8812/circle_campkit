@@ -36,6 +36,7 @@ type Plan = {
   area: string | null
   description: string | null
   default_transport: string | null
+  budget_per_person: number | null
   created_at: string | null
   updated_at: string | null
 }
@@ -195,9 +196,9 @@ export default function PlanDetailClient({
     is_closed: recruitment?.is_closed ?? false,
   })
   const [submitting, setSubmitting] = useState<string | null>(null)
-  const [prepInput, setPrepInput] = useState('')
-  // 「共同装備（みんなで使う）」として登録するかどうか
-  const [prepShared, setPrepShared] = useState(false)
+  // 持ち物: 個人用・共同用でそれぞれ自由入力欄を持つ
+  const [personalInput, setPersonalInput] = useState('')
+  const [sharedInput, setSharedInput] = useState('')
   const myReview = reviews.find((review) => review.user_id === currentUserId)
   const [reviewForm, setReviewForm] = useState({
     body: myReview?.body ?? '',
@@ -691,12 +692,20 @@ export default function PlanDetailClient({
     setSubmitting(null)
   }
 
-  const addPreparation = async (event: React.FormEvent<HTMLFormElement>) => {
+  const addPersonalItem = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const body = prepInput.trim()
+    const body = personalInput.trim()
     if (!body) return
-    await addPreparationRow(body, prepShared ? 'shared' : 'gear')
-    setPrepInput('')
+    await addPreparationRow(body, 'gear')
+    setPersonalInput('')
+  }
+
+  const addSharedItem = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const body = sharedInput.trim()
+    if (!body) return
+    await addPreparationRow(body, 'shared')
+    setSharedInput('')
   }
 
   // 参加直後のモーダルで選んだ道具・車をまとめて登録する
@@ -815,8 +824,9 @@ export default function PlanDetailClient({
           <Link
             href={`/groups/${group.id}/plans/${plan.id}/document`}
             className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100"
+            title="学校に提出する書類（計画書＋参加者名簿）を作成します"
           >
-            📄 計画書
+            📄 提出書類をつくる
           </Link>
         </div>
       </div>
@@ -840,6 +850,7 @@ export default function PlanDetailClient({
         {isCreator && (
           <StatusManager
             phase={phase}
+            groupName={group.name}
             updatingStatus={updatingStatus}
             closing={submitting === 'close'}
             editHref={`/groups/${group.id}/plans/${plan.id}/edit`}
@@ -861,12 +872,18 @@ export default function PlanDetailClient({
           )}
         </div>
 
-        <dl className="grid gap-4 sm:grid-cols-2">
-          <DetailItem label="種別" value={plan.category} />
+        {/* 見やすさ優先で、基本情報は タイトル(見出し)・日程・場所・予算 のみ */}
+        <dl className="grid gap-4 sm:grid-cols-3">
           <DetailItem label="日程" value={formatDateRange(plan.start_date, plan.end_date)} />
-          <DetailItem label="場所エリア" value={plan.area} />
-          <DetailItem label="基本交通手段" value={plan.default_transport || '未定'} />
-          <DetailItem label="作成日" value={formatDate(plan.created_at)} />
+          <DetailItem label="場所" value={plan.area} />
+          <DetailItem
+            label="一人あたり予算"
+            value={
+              plan.budget_per_person != null
+                ? `約${plan.budget_per_person.toLocaleString()}円`
+                : null
+            }
+          />
         </dl>
 
         {isCreator && (
@@ -914,24 +931,7 @@ export default function PlanDetailClient({
         />
       )}
 
-      <RecruitmentSection
-        recruitment={recruitment}
-        participants={participants}
-        isCreator={isCreator}
-        isParticipating={Boolean(myParticipant)}
-        isCreatorParticipant={Boolean(myParticipant && isCreator)}
-        canJoin={canJoin}
-        capacityReached={capacityReached}
-        deadlinePassed={deadlinePassed}
-        form={recruitmentForm}
-        setForm={setRecruitmentForm}
-        submitting={submitting}
-        onSave={saveRecruitment}
-        onJoin={joinPlan}
-        onLeave={leavePlan}
-        missingProfileFields={missingProfileFields}
-      />
-
+      {/* 行程表 → 募集・参加 の順に表示 */}
       <ScheduleSection
         items={scheduleItems}
         defaultTransport={plan.default_transport}
@@ -950,19 +950,39 @@ export default function PlanDetailClient({
         onSaveEdit={saveScheduleEdit}
       />
 
-      {phase !== 'past' && (
+      <RecruitmentSection
+        recruitment={recruitment}
+        participants={participants}
+        isCreator={isCreator}
+        isParticipating={Boolean(myParticipant)}
+        isCreatorParticipant={Boolean(myParticipant && isCreator)}
+        canJoin={canJoin}
+        capacityReached={capacityReached}
+        deadlinePassed={deadlinePassed}
+        form={recruitmentForm}
+        setForm={setRecruitmentForm}
+        submitting={submitting}
+        onSave={saveRecruitment}
+        onJoin={joinPlan}
+        onLeave={leavePlan}
+        missingProfileFields={missingProfileFields}
+      />
+
+      {/* 持ち物・準備は、募集を開始してから（募集中・実施）だけ表示する */}
+      {(phase === 'recruiting' || phase === 'in_progress') && (
         <PreparationSection
           preparations={preparations}
           currentUserId={currentUserId}
           isParticipant={Boolean(myParticipant)}
           myGear={myGear}
           myCars={myCars}
-          input={prepInput}
-          setInput={setPrepInput}
-          shared={prepShared}
-          setShared={setPrepShared}
+          personalInput={personalInput}
+          setPersonalInput={setPersonalInput}
+          sharedInput={sharedInput}
+          setSharedInput={setSharedInput}
           submitting={submitting === 'preparation'}
-          onAdd={addPreparation}
+          onAddPersonal={addPersonalItem}
+          onAddShared={addSharedItem}
           onAddItem={addPreparationRow}
           onDelete={deletePreparation}
         />
@@ -1108,6 +1128,7 @@ export default function PlanDetailClient({
 // 戻す操作は用意しない。各フェーズで「次にやること」だけを提示する。
 function StatusManager({
   phase,
+  groupName,
   updatingStatus,
   closing,
   editHref,
@@ -1115,6 +1136,7 @@ function StatusManager({
   onClose,
 }: {
   phase: PlanPhase
+  groupName: string
   updatingStatus: PlanStatus | null
   closing: boolean
   editHref: string
@@ -1125,27 +1147,55 @@ function StatusManager({
 
   if (phase === 'draft') {
     return (
-      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-        <p className="text-sm font-bold text-amber-800">この計画は「未公開」です</p>
-        <p className="mt-1 text-xs leading-5 text-amber-700">
-          未公開の計画は<strong>あなただけ</strong>が見られます（「自分の計画」タブにあります）。
-          募集を開始すると、グループ全員に公開され、メンバーが参加できるようになります。
-        </p>
-        <p className="mt-2 text-xs text-amber-700">
-          進み方：<strong>未公開 → 募集中 → 実施 → 過去</strong>（戻すことはできません）
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mb-6 overflow-hidden rounded-xl border border-amber-200 bg-amber-50">
+        <div className="p-4">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-bold text-gray-600">
+              未公開
+            </span>
+            <span className="text-xs text-gray-500">＝ 今はあなただけが見られます</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-amber-800">
+            内容がそろったら<strong>「募集を開始」</strong>を押すと、
+            <strong>{groupName ? `「${groupName}」の` : ''}グループ全員に公開</strong>され、メンバーが参加できるようになります。
+          </p>
+
+          {/* 進み方を視覚的に（今どこか分かるように） */}
+          <div className="mt-3 flex items-center gap-1 text-xs font-semibold">
+            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-white">未公開</span>
+            <span className="text-amber-400">→</span>
+            <span className="rounded-full bg-white px-2 py-0.5 text-amber-700 ring-1 ring-amber-200">
+              募集中
+            </span>
+            <span className="text-amber-300">→</span>
+            <span className="rounded-full bg-white px-2 py-0.5 text-gray-400 ring-1 ring-gray-200">
+              実施
+            </span>
+            <span className="text-amber-300">→</span>
+            <span className="rounded-full bg-white px-2 py-0.5 text-gray-400 ring-1 ring-gray-200">
+              過去
+            </span>
+          </div>
+        </div>
+
+        {/* 目立つ公開ボタン */}
+        <div className="border-t border-amber-200 bg-amber-100/60 p-4">
           <button
             type="button"
             onClick={() => onChange('recruiting')}
             disabled={busy}
-            className="btn-primary"
+            className="btn-primary w-full py-3 text-base"
           >
-            {updatingStatus === 'recruiting' ? '公開中...' : '📣 募集を開始する（グループに公開）'}
+            {updatingStatus === 'recruiting'
+              ? '公開しています...'
+              : '📣 募集を開始する（グループ全員に公開）'}
           </button>
-          <Link href={editHref} className="btn-secondary">
-            ✏️ 基本情報を編集
-          </Link>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-amber-700">まだ内容を直せます：</span>
+            <Link href={editHref} className="font-bold text-green-700 hover:underline">
+              ✏️ 基本情報を編集
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -1405,18 +1455,21 @@ function RecruitmentSection({
   )
 }
 
+// 持ち物・準備：上に「個人の持ち物」、下に「共同の持ち物（みんなで使う）」を
+// それぞれ独立した欄として表示し、各欄に追加ボタンを置く（見やすさ優先）。
 function PreparationSection({
   preparations,
   currentUserId,
   isParticipant,
   myGear,
   myCars,
-  input,
-  setInput,
-  shared,
-  setShared,
+  personalInput,
+  setPersonalInput,
+  sharedInput,
+  setSharedInput,
   submitting,
-  onAdd,
+  onAddPersonal,
+  onAddShared,
   onAddItem,
   onDelete,
 }: {
@@ -1425,126 +1478,97 @@ function PreparationSection({
   isParticipant: boolean
   myGear: GearItem[]
   myCars: CarItem[]
-  input: string
-  setInput: React.Dispatch<React.SetStateAction<string>>
-  shared: boolean
-  setShared: React.Dispatch<React.SetStateAction<boolean>>
+  personalInput: string
+  setPersonalInput: React.Dispatch<React.SetStateAction<string>>
+  sharedInput: string
+  setSharedInput: React.Dispatch<React.SetStateAction<string>>
   submitting: boolean
-  onAdd: (event: React.FormEvent<HTMLFormElement>) => void
+  onAddPersonal: (event: React.FormEvent<HTMLFormElement>) => void
+  onAddShared: (event: React.FormEvent<HTMLFormElement>) => void
   onAddItem: (body: string, type: 'gear' | 'car' | 'shared') => void
   onDelete: (id: string) => void
 }) {
-  // すでに自分が登録した内容は、クイック追加の候補から外す
+  // すでに自分が登録した内容は、プロフィールからのクイック追加の候補から外す
   const myBodies = new Set(
     preparations.filter((p) => p.user_id === currentUserId).map((p) => p.body ?? '')
   )
   const gearChips = myGear.filter((gear) => !myBodies.has(gear.name))
   const carChips = myCars.filter((car) => !myBodies.has(carLabel(car)))
 
-  // 共同装備 / 個人の持ち物 / 車 に分けて表示する
+  // 個人の持ち物（道具・車） / 共同の持ち物 に振り分け
+  const personalItems = preparations.filter((p) => p.type !== 'shared')
   const sharedItems = preparations.filter((p) => p.type === 'shared')
-  const personalItems = preparations.filter((p) => p.type !== 'shared' && p.type !== 'car')
-  const carItems = preparations.filter((p) => p.type === 'car')
-  const groups: { title: string; icon: string; items: Preparation[] }[] = [
-    { title: '共同装備（みんなで使う）', icon: '🤝', items: sharedItems },
-    { title: '個人の持ち物', icon: '🎒', items: personalItems },
-    { title: '出せる車', icon: '🚗', items: carItems },
-  ].filter((entry) => entry.items.length > 0)
+
+  const renderItem = (prep: Preparation) => (
+    <li key={prep.id} className="flex items-center gap-3 px-3 py-2.5">
+      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200">
+        {prep.profiles?.avatar_url ? (
+          <Image
+            src={prep.profiles.avatar_url}
+            alt=""
+            width={28}
+            height={28}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="text-xs text-gray-400">👤</span>
+        )}
+      </div>
+      <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
+        {prep.type === 'car' && (
+          <span aria-hidden className="mr-1">
+            🚗
+          </span>
+        )}
+        {prep.body}
+      </span>
+      <span className="flex-shrink-0 text-xs text-gray-400">
+        {prep.profiles?.name ?? '名前未設定'}
+      </span>
+      {prep.user_id === currentUserId && (
+        <button
+          type="button"
+          onClick={() => onDelete(prep.id)}
+          className="flex-shrink-0 text-xs font-semibold text-red-500 hover:text-red-700"
+        >
+          削除
+        </button>
+      )}
+    </li>
+  )
 
   return (
     <section className="rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.03]">
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-        <h2 className="text-sm font-bold text-gray-700">持ち物・準備</h2>
-        <span className="text-xs text-gray-400">{preparations.length}件</span>
-      </div>
+      <SectionHeader title="持ち物・準備" />
 
-      <div className="space-y-4 p-4">
-        <p className="text-xs text-gray-500">
-          自分が持っていく物を登録すると、みんなに共有されます。かぶりや不足を防げます。
-        </p>
+      <div className="space-y-6 p-4">
+        {/* ───────── 個人の持ち物 ───────── */}
+        <div>
+          <p className="mb-2 text-sm font-bold text-gray-700">🎒 個人の持ち物</p>
+          {personalItems.length === 0 ? (
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-400">
+              まだありません
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
+              {personalItems.map(renderItem)}
+            </ul>
+          )}
 
-        {preparations.length === 0 ? (
-          <p className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-400">
-            まだ登録がありません。最初のひとつを追加しましょう。
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {groups.map((entry) => (
-              <div key={entry.title}>
-                <p className="mb-1.5 text-xs font-bold text-gray-600">
-                  <span aria-hidden className="mr-1">
-                    {entry.icon}
-                  </span>
-                  {entry.title}（{entry.items.length}）
-                </p>
-                <ul
-                  className={`divide-y divide-gray-100 rounded-xl border ${
-                    entry.title.startsWith('共同装備')
-                      ? 'border-green-200 bg-green-50/40'
-                      : 'border-gray-100'
-                  }`}
-                >
-                  {entry.items.map((prep) => (
-                    <li key={prep.id} className="flex items-center gap-3 px-3 py-2.5">
-                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200">
-                        {prep.profiles?.avatar_url ? (
-                          <Image
-                            src={prep.profiles.avatar_url}
-                            alt=""
-                            width={28}
-                            height={28}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-gray-400">👤</span>
-                        )}
-                      </div>
-                      <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
-                        {prep.body}
-                      </span>
-                      <span className="flex-shrink-0 text-xs text-gray-400">
-                        {prep.profiles?.name ?? '名前未設定'}
-                      </span>
-                      {prep.user_id === currentUserId && (
-                        <button
-                          type="button"
-                          onClick={() => onDelete(prep.id)}
-                          className="flex-shrink-0 text-xs font-semibold text-red-500 hover:text-red-700"
-                        >
-                          削除
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 登録できるのは参加者だけ */}
-        {!isParticipant ? (
-          <p className="rounded-lg bg-gray-50 px-4 py-3 text-center text-xs text-gray-500">
-            持ち物・車を登録できるのは、この計画に参加したメンバーだけです。
-          </p>
-        ) : (
-          <div className="space-y-3 border-t border-gray-100 pt-4">
-            {/* プロフィールに登録済みの道具・車からクイック追加 */}
-            {(gearChips.length > 0 || carChips.length > 0) && (
-              <div>
-                <p className="mb-1.5 text-xs font-bold text-gray-600">
-                  プロフィールの登録から追加
-                </p>
+          {isParticipant && (
+            <div className="mt-3 space-y-2">
+              {/* プロフィールの登録から追加 */}
+              {(gearChips.length > 0 || carChips.length > 0) && (
                 <div className="flex flex-wrap gap-1.5">
                   {gearChips.map((gear) => (
                     <button
                       key={gear.id}
                       type="button"
                       disabled={submitting}
-                      onClick={() => onAddItem(gear.name, shared ? 'shared' : 'gear')}
+                      onClick={() => onAddItem(gear.name, 'gear')}
                       className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
                     >
-                      ＋ {shared ? '🤝' : '🎒'} {gear.name}
+                      ＋ 🎒 {gear.name}
                     </button>
                   ))}
                   {carChips.map((car) => (
@@ -1559,48 +1583,62 @@ function PreparationSection({
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+              <form onSubmit={onAddPersonal} className="flex gap-2">
+                <input
+                  value={personalInput}
+                  onChange={(event) => setPersonalInput(event.target.value)}
+                  className={`${inputClass} flex-1`}
+                  placeholder="自分が持っていく物（例: ランタン、まな板）"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting || personalInput.trim() === ''}
+                  className="btn-primary flex-shrink-0"
+                >
+                  個人の持ち物を追加
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
 
-            {myGear.length === 0 && myCars.length === 0 && (
-              <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                プロフィールに道具・車がまだ登録されていません。
-                <Link href="/profile" className="ml-1 font-bold text-green-600 underline">
-                  プロフィールで登録する
-                </Link>
-              </p>
-            )}
+        {/* ───────── 共同の持ち物 ───────── */}
+        <div className="border-t border-gray-100 pt-5">
+          <p className="mb-2 text-sm font-bold text-gray-700">🤝 共同の持ち物（みんなで使う）</p>
+          {sharedItems.length === 0 ? (
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-400">
+              まだありません
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100 rounded-xl border border-green-200 bg-green-50/40">
+              {sharedItems.map(renderItem)}
+            </ul>
+          )}
 
-            {/* 共同装備として登録するかどうか（上のチップにも適用される） */}
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
+          {isParticipant && (
+            <form onSubmit={onAddShared} className="mt-3 flex gap-2">
               <input
-                type="checkbox"
-                checked={shared}
-                onChange={(event) => setShared(event.target.checked)}
-                className="h-4 w-4"
-              />
-              <span>
-                <strong>🤝 共同装備として登録</strong>（テントや鍋など、みんなで使う物）
-              </span>
-            </label>
-
-            {/* 登録にないものは自由入力で追加 */}
-            <form onSubmit={onAdd} className="flex gap-2">
-              <input
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
+                value={sharedInput}
+                onChange={(event) => setSharedInput(event.target.value)}
                 className={`${inputClass} flex-1`}
-                placeholder={shared ? '共同装備（例: テント、大鍋）' : 'その他（例: ランタン、まな板）'}
+                placeholder="みんなで使う物（例: テント、大鍋、タープ）"
               />
               <button
                 type="submit"
-                disabled={submitting || input.trim() === ''}
+                disabled={submitting || sharedInput.trim() === ''}
                 className="btn-primary flex-shrink-0"
               >
-                {submitting ? '追加中...' : '追加'}
+                みんなで使うものを追加
               </button>
             </form>
-          </div>
+          )}
+        </div>
+
+        {!isParticipant && (
+          <p className="text-center text-xs text-gray-400">
+            持ち物を登録できるのは、この計画に参加したメンバーだけです。
+          </p>
         )}
       </div>
     </section>

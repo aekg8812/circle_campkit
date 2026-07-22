@@ -29,6 +29,26 @@ textarea {
   caret-color: #171717;
 }
 
+/* スマホで日付・時刻の入力欄が横に広がって画面からはみ出すのを防ぐ
+   （intrinsic な最小幅を打ち消し、必ず枠内に収める） */
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"] {
+  min-width: 0;
+  width: 100%;
+}
+
+/* 長いURL・メールなどでの横はみ出しも防ぐ */
+body {
+  overflow-wrap: break-word;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: #9ca3af;

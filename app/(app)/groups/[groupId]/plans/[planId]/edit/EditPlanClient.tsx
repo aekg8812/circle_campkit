@@ -24,6 +24,7 @@ type Plan = {
   end_date: string | null
   area: string | null
   description: string | null
+  budget_per_person: number | null
 }
 
 type Props = {
@@ -38,6 +39,7 @@ const schema = z
     start_date: z.string().optional().nullable(),
     end_date: z.string().optional().nullable(),
     area: z.string().optional().nullable(),
+    budget: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
   })
   .refine(
@@ -67,6 +69,7 @@ export default function EditPlanClient({ group, plan }: Props) {
       start_date: plan.start_date ?? '',
       end_date: plan.end_date ?? '',
       area: plan.area ?? '',
+      budget: plan.budget_per_person != null ? String(plan.budget_per_person) : '',
       description: plan.description ?? '',
     },
   })
@@ -82,6 +85,8 @@ export default function EditPlanClient({ group, plan }: Props) {
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         area: data.area || null,
+        budget_per_person:
+          data.budget && data.budget.trim() !== '' ? Number(data.budget) : null,
         description: data.description || null,
         updated_at: new Date().toISOString(),
       })
@@ -143,9 +148,20 @@ export default function EditPlanClient({ group, plan }: Props) {
             </Field>
           </div>
 
-          <Field label="場所エリア" error={errors.area?.message}>
-            <input {...register('area')} className={inputClass} placeholder="福岡県糸島市" />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="場所エリア" error={errors.area?.message}>
+              <input {...register('area')} className={inputClass} placeholder="福岡県糸島市" />
+            </Field>
+            <Field label="一人あたり予算（円）" error={errors.budget?.message}>
+              <input
+                {...register('budget')}
+                type="number"
+                min={0}
+                className={inputClass}
+                placeholder="例: 5000"
+              />
+            </Field>
+          </div>
 
           <Field label="説明" error={errors.description?.message}>
             <textarea

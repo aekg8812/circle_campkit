@@ -89,6 +89,29 @@ export default async function PlanDocumentPage({
       : Promise.resolve({ data: null }),
   ])
 
+  // ★書類の使い回し: この計画にまだ書類が無いとき、同じグループの直近の計画書から
+  //   顧問教員・宛先・宿泊所・病院などを初期値として引き継ぐ（毎回入力しなくて済む）。
+  let previousDocument: typeof planDocument = null
+  if (!planDocument) {
+    const { data: groupPlanIds } = await supabase
+      .from('plans')
+      .select('id')
+      .eq('group_id', groupId)
+      .neq('id', planId)
+
+    const otherPlanIds = (groupPlanIds ?? []).map((p) => p.id)
+    if (otherPlanIds.length > 0) {
+      const { data: prev } = await supabase
+        .from('plan_documents')
+        .select('*')
+        .in('plan_id', otherPlanIds)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      previousDocument = prev ?? null
+    }
+  }
+
   const normalizedParticipants = (participants ?? []).map((participant) => ({
     ...participant,
     profiles: Array.isArray(participant.profiles)
@@ -130,6 +153,7 @@ export default async function PlanDocumentPage({
       memberProfiles={memberProfiles ?? []}
       defaultRepresentativeId={defaultRepresentativeId}
       planDocument={planDocument}
+      previousDocument={previousDocument}
       creatorProfile={creatorProfile}
       leaderProfile={leaderProfile}
       currentUserId={user.id}

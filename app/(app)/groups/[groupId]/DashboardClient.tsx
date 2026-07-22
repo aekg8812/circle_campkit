@@ -82,9 +82,31 @@ export default function DashboardClient({
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
-  const isLeader =
-    group.created_by === currentUserId ||
-    members.find((member) => member.user_id === currentUserId)?.position === '部長'
+  // 参加パスワードの変更は「グループの作成者」だけができる（サーバ側の認可と一致させる）
+  const isGroupCreator = group.created_by === currentUserId
+  const myPosition =
+    members.find((member) => member.user_id === currentUserId)?.position ?? '部員'
+  // グループのメニュー（招待・役職・編集・脱退など）の開閉と役職変更
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [roleValue, setRoleValue] = useState(myPosition)
+  const [roleSaving, setRoleSaving] = useState(false)
+
+  const changeMyRole = async (position: string) => {
+    setRoleValue(position)
+    setRoleSaving(true)
+    const { error } = await supabase.rpc('set_my_group_role', {
+      p_group_id: group.id,
+      p_position: position,
+    })
+    setRoleSaving(false)
+    if (error) {
+      setRoleValue(myPosition)
+      toast('役職の変更に失敗しました', 'error')
+      return
+    }
+    toast('役職を変更しました')
+    router.refresh()
+  }
   const [activeTab, setActiveTab] = useState<PlanTab>('recruiting')
   const [sortKey, setSortKey] = useState<SortKey>('created_desc')
   const [leaving, setLeaving] = useState(false)
@@ -278,76 +300,136 @@ export default function DashboardClient({
             <span className="text-6xl text-gray-200">&#x26FA;</span>
           )}
         </div>
-        <div className="space-y-3 p-4">
+        <div className="p-4">
           <div className="flex items-center justify-between gap-3">
             <h1 className="min-w-0 text-xl font-bold text-gray-800">{group.name}</h1>
-            <div className="flex flex-shrink-0 items-center gap-2">
-              <button
-                onClick={() => {
-                  setEditName(group.name)
-                  setEditImageUrl(group.image_url)
-                  setEditError(null)
-                  setShowEditModal(true)
-                }}
-                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700"
-              >
-                ✏️ 編集
-              </button>
-              <button
-                onClick={handleLeave}
-                disabled={leaving}
-                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-500 transition hover:border-red-400 hover:text-red-700 disabled:opacity-50"
-              >
-                {leaving ? '処理中...' : '脱退'}
-              </button>
-            </div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
+            {/* メニュー（招待・役職・編集・脱退などをまとめる） */}
             <button
               type="button"
-              onClick={copyInviteUrl}
-              className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-expanded={menuOpen}
+              aria-label="グループのメニュー"
+              className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                menuOpen
+                  ? 'border-green-400 bg-green-50 text-green-700'
+                  : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
+              }`}
             >
-              {inviteCopied ? 'コピーしました' : '招待リンクをコピー'}
+              <span aria-hidden className="text-base leading-none">
+                ☰
+              </span>
+              メニュー
             </button>
-            <button
-              type="button"
-              onClick={openQr}
-              className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
-            >
-              QRコードで招待
-            </button>
-            <a
-              href={inviteUrl ? lineShareUrl() : '#'}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => {
-                if (!inviteUrl) event.preventDefault()
-              }}
-              aria-disabled={!inviteUrl}
-              className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-green-700 aria-disabled:opacity-50"
-            >
-              LINEで招待
-            </a>
           </div>
 
-          {isLeader && (
-            <button
-              type="button"
-              onClick={() => {
-                setPwForm({ password: '', confirm: '' })
-                setPwError(null)
-                setShowPwModal(true)
-              }}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700"
-            >
-              🔑 参加パスワードを変更
-            </button>
+          {/* メニュー本体（ボタンの下に展開） */}
+          {menuOpen && (
+            <div className="mt-3 space-y-4 rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+              {/* 招待 */}
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                  メンバーを招待
+                </p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={copyInviteUrl}
+                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
+                  >
+                    {inviteCopied ? 'コピーしました' : '招待リンク'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openQr}
+                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
+                  >
+                    QRコード
+                  </button>
+                  <a
+                    href={inviteUrl ? lineShareUrl() : '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(event) => {
+                      if (!inviteUrl) event.preventDefault()
+                    }}
+                    aria-disabled={!inviteUrl}
+                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-green-700 aria-disabled:opacity-50"
+                  >
+                    LINEで招待
+                  </a>
+                </div>
+              </div>
+
+              {/* 自分の役職 */}
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                  自分の役職
+                </p>
+                <select
+                  value={roleValue}
+                  onChange={(event) => changeMyRole(event.target.value)}
+                  disabled={roleSaving}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                >
+                  {['部長', '副部長', '部員'].map((position) => (
+                    <option key={position} value={position}>
+                      {position}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  計画書の名簿の「役職」に反映されます。
+                </p>
+              </div>
+
+              {/* グループ設定 */}
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                  グループ設定
+                </p>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditName(group.name)
+                      setEditImageUrl(group.image_url)
+                      setEditError(null)
+                      setShowEditModal(true)
+                    }}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition hover:border-green-400 hover:text-green-700"
+                  >
+                    ✏️ グループ名・画像を編集
+                  </button>
+                  {isGroupCreator && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPwForm({ password: '', confirm: '' })
+                        setPwError(null)
+                        setShowPwModal(true)
+                      }}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition hover:border-green-400 hover:text-green-700"
+                    >
+                      🔑 参加パスワードを変更
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleLeave}
+                    disabled={leaving}
+                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-left text-sm font-semibold text-red-600 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {leaving ? '処理中...' : '🚪 このグループを脱退'}
+                  </button>
+                </div>
+              </div>
+
+              {leaveError && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{leaveError}</p>
+              )}
+            </div>
           )}
         </div>
-        {leaveError && (
-          <p className="text-sm text-red-600 bg-red-50 px-4 pb-3">{leaveError}</p>
-        )}
       </div>
 
       {/* メンバー一覧 */}
@@ -355,7 +437,7 @@ export default function DashboardClient({
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
           メンバー（{members.length}人）
         </h2>
-        <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+        <div className="max-h-96 overflow-y-auto rounded-2xl bg-white shadow-sm divide-y divide-gray-100">
           {members.map((m) => {
             const proposed = plansByCreator.get(m.user_id) ?? []
             return (
@@ -409,7 +491,7 @@ export default function DashboardClient({
 
       {/* 計画一覧 */}
       <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-1 flex items-center justify-between gap-3">
           <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400">
             計画
           </h2>
@@ -420,6 +502,9 @@ export default function DashboardClient({
             ＋ 計画を作成
           </Link>
         </div>
+        <p className="mb-3 text-xs text-gray-500">
+          キャンプ・合宿などの「計画」を作って、募集・参加・提出書類づくりまでできます。「＋ 計画を作成」から始めましょう（テンプレートも使えます）。
+        </p>
         <div className="bg-white rounded-2xl shadow-sm">
           <div className="flex border-b border-gray-100">
             <PlanTabButton
@@ -492,7 +577,7 @@ export default function DashboardClient({
               }
             />
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="max-h-[32rem] divide-y divide-gray-100 overflow-y-auto">
               {visiblePlans.map((plan) => {
                 const recruitment = recruitmentByPlan[plan.id]
                 const deadlineStatus = getDeadlineStatus(recruitment?.deadline ?? null)

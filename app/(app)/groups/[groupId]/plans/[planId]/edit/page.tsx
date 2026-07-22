@@ -31,7 +31,7 @@ export default async function EditPlanPage({
       .single(),
     supabase
       .from('plans')
-      .select('id, group_id, creator_id, title, category, start_date, end_date, area, description')
+      .select('id, group_id, creator_id, title, category, start_date, end_date, area, description, budget_per_person')
       .eq('id', planId)
       .eq('group_id', groupId)
       .single(),

@@ -22,22 +22,33 @@ export default async function HomePage() {
     redirect('/login')
   }
 
-  const [{ data: profile }, { data: memberships }, { data: myParticipations }] =
-    await Promise.all([
-      supabase
-        .from('profiles')
-        .select('name, avatar_url, student_id, grade, department, phone, school_email, academic_advisor')
-        .eq('id', user.id)
-        .single(),
-      supabase
-        .from('group_members')
-        .select('group_id, position, groups(id, name, image_url)')
-        .eq('user_id', user.id),
-      supabase
-        .from('participants')
-        .select('plan_id, plans(id, group_id, title, status, start_date, end_date)')
-        .eq('user_id', user.id),
-    ])
+  const [
+    { data: profile },
+    { data: memberships },
+    { data: myParticipations },
+    { data: myPreparations },
+    { data: myDrafts },
+  ] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('name, avatar_url, student_id, grade, department, phone, school_email, academic_advisor')
+      .eq('id', user.id)
+      .single(),
+    supabase
+      .from('group_members')
+      .select('group_id, position, groups(id, name, image_url)')
+      .eq('user_id', user.id),
+    supabase
+      .from('participants')
+      .select('plan_id, plans(id, group_id, title, status, start_date, end_date)')
+      .eq('user_id', user.id),
+    supabase.from('preparations').select('plan_id').eq('user_id', user.id),
+    supabase
+      .from('plans')
+      .select('id, group_id, title')
+      .eq('creator_id', user.id)
+      .eq('status', 'draft'),
+  ])
 
   const missingFields = getMissingDocumentFields(profile)
 
@@ -66,6 +77,47 @@ export default async function HomePage() {
   const today = new Date().toISOString().slice(0, 10)
   const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
   const myParticipantPlanIds = new Set((myParticipations ?? []).map((p) => p.plan_id))
+
+  // ★やることリスト（自分に関する未対応をまとめる）
+  const preparedPlanIds = new Set((myPreparations ?? []).map((p) => p.plan_id))
+  const todos: { key: string; icon: string; text: string; href: string }[] = []
+
+  // 1) プロフィール未完成
+  if (missingFields.length > 0) {
+    todos.push({
+      key: 'profile',
+      icon: '🪪',
+      text: `プロフィールを完成させる（未入力：${missingFields.map((f) => f.label).join('・')}）`,
+      href: '/profile',
+    })
+  }
+
+  // 2) 参加した計画（公開中・過去でない）で、持ち物をまだ登録していない
+  for (const participation of myParticipations ?? []) {
+    const plan = Array.isArray(participation.plans)
+      ? (participation.plans[0] ?? null)
+      : participation.plans
+    if (!plan || plan.status !== 'recruiting') continue
+    const lastDay = plan.end_date || plan.start_date
+    if (lastDay && lastDay < today) continue // 実施日を過ぎたものは除く
+    if (preparedPlanIds.has(plan.id)) continue
+    todos.push({
+      key: `prep-${plan.id}`,
+      icon: '🎒',
+      text: `「${plan.title}」の持ち物を登録する`,
+      href: `/groups/${plan.group_id}/plans/${plan.id}`,
+    })
+  }
+
+  // 3) 自分が作った未公開のままの計画
+  for (const draft of myDrafts ?? []) {
+    todos.push({
+      key: `draft-${draft.id}`,
+      icon: '📣',
+      text: `「${draft.title}」を公開する（未公開のまま）`,
+      href: `/groups/${draft.group_id}/plans/${draft.id}`,
+    })
+  }
 
   // ① 参加確定した計画：開始7日前〜開催中のものだけ（多すぎて見にくくならないように）
   const confirmedSoon = (myParticipations ?? [])
@@ -154,23 +206,31 @@ export default async function HomePage() {
         myGroups.length === 0 && <WelcomeStrip />
       )}
 
-      {/* プロフィール完成度バナー（計画書に必要な項目が未入力のときだけ表示） */}
-      {missingFields.length > 0 && (
-        <Link
-          href="/profile"
-          className="animate-fade-in-up flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 transition hover:bg-amber-100 [animation-delay:40ms]"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-amber-800">
-              プロフィールを完成させましょう
-            </p>
-            <p className="mt-0.5 text-xs leading-5 text-amber-700">
-              計画書に必要な{missingFields.length}項目が未入力です（
-              {missingFields.map((field) => field.label).join('・')}）
-            </p>
-          </div>
-          <span className="flex-shrink-0 text-xl text-amber-400">→</span>
-        </Link>
+      {/* やることリスト（自分に関する未対応があるときだけ表示） */}
+      {todos.length > 0 && (
+        <section className="animate-fade-in-up rounded-2xl border border-amber-200 bg-amber-50 p-4 [animation-delay:40ms]">
+          <p className="mb-2 text-sm font-bold text-amber-800">
+            ✅ やること（{todos.length}）
+          </p>
+          <ul className="space-y-1.5">
+            {todos.map((todo) => (
+              <li key={todo.key}>
+                <Link
+                  href={todo.href}
+                  className="flex items-center gap-2.5 rounded-lg bg-white/70 px-3 py-2 text-sm text-amber-900 transition hover:bg-white"
+                >
+                  <span aria-hidden className="flex-shrink-0">
+                    {todo.icon}
+                  </span>
+                  <span className="min-w-0 flex-1">{todo.text}</span>
+                  <span aria-hidden className="flex-shrink-0 text-amber-400">
+                    →
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {/* 自分のグループ（ホームの主役） */}
