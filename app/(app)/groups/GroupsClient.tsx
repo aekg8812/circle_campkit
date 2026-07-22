@@ -100,12 +100,17 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
 
   return (
     <div className="space-y-8">
-      <Link
-        href="/groups/new"
-        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.99]"
-      >
-        ＋ 新しいグループを作成
-      </Link>
+      <div>
+        <Link
+          href="/groups/new"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.99]"
+        >
+          ＋ 新しいグループを作成
+        </Link>
+        <p className="mt-2 text-center text-xs text-gray-500">
+          サークルの「部屋」を作ります。作った人が管理者になり、参加パスワードを決めます。
+        </p>
+      </div>
 
       {/* 参加中のグループ */}
       <section>
@@ -134,9 +139,12 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       </section>
 
       <section>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
           グループに参加する
         </h2>
+        <p className="mb-3 text-xs text-gray-500">
+          入りたいグループを名前で探して、そのグループの参加パスワードを入力すると参加できます。
+        </p>
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
           <input
             value={searchText}

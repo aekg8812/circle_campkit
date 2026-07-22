@@ -33,8 +33,9 @@ export default function SignupPage() {
   const onSubmit = async (data: FormValues) => {
     setServerError(null)
     const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
-      email: data.email,
+    const email = data.email.trim().toLowerCase()
+    const { data: result, error } = await supabase.auth.signUp({
+      email,
       password: data.password,
       options: {
         data: { name: data.name },
@@ -47,6 +48,13 @@ export default function SignupPage() {
       setServerError(error.message)
       return
     }
+    // メール確認が無効な設定なら、この時点でログイン済み → そのまま進める
+    if (result.session) {
+      router.push('/profile?onboarding=1')
+      router.refresh()
+      return
+    }
+    // メール確認が有効なら、確認メールの案内を表示
     setDone(true)
   }
 

@@ -79,6 +79,7 @@ type Props = {
   memberProfiles: ProfileRow[]
   defaultRepresentativeId: string | null
   planDocument: PlanDocumentRow | null
+  previousDocument: PlanDocumentRow | null
   creatorProfile: ProfileRow | null
   leaderProfile: ProfileRow | null
   currentUserId: string
@@ -105,6 +106,7 @@ export default function DocumentClient({
   memberProfiles,
   defaultRepresentativeId,
   planDocument,
+  previousDocument,
   creatorProfile,
   leaderProfile,
   currentUserId,
@@ -120,20 +122,23 @@ export default function DocumentClient({
     defaultRepresentativeId
   )
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  // この計画にまだ書類が無いとき、同グループの直近の書類から引き継ぐ（初期値のみ・作成日と備考は除く）
+  const base = planDocument ?? previousDocument
+  const carriedOver = !planDocument && previousDocument != null
   const [form, setForm] = useState<PlanDocumentFormValues>({
     created_date: planDocument?.created_date ?? todayIso(),
-    recipient: planDocument?.recipient ?? DEFAULT_RECIPIENT,
-    advisor_name: planDocument?.advisor_name ?? '',
-    advisor_affiliation: planDocument?.advisor_affiliation ?? '',
-    advisor_phone: planDocument?.advisor_phone ?? '',
-    lodging_name: planDocument?.lodging_name ?? '',
-    lodging_address: planDocument?.lodging_address ?? '',
-    lodging_phone: planDocument?.lodging_phone ?? '',
-    transport_note: planDocument?.transport_note ?? '',
-    hospital_name: planDocument?.hospital_name ?? '',
-    hospital_address: planDocument?.hospital_address ?? '',
-    hospital_phone: planDocument?.hospital_phone ?? '',
-    hospital_distance: planDocument?.hospital_distance ?? '',
+    recipient: base?.recipient ?? DEFAULT_RECIPIENT,
+    advisor_name: base?.advisor_name ?? '',
+    advisor_affiliation: base?.advisor_affiliation ?? '',
+    advisor_phone: base?.advisor_phone ?? '',
+    lodging_name: base?.lodging_name ?? '',
+    lodging_address: base?.lodging_address ?? '',
+    lodging_phone: base?.lodging_phone ?? '',
+    transport_note: base?.transport_note ?? '',
+    hospital_name: base?.hospital_name ?? '',
+    hospital_address: base?.hospital_address ?? '',
+    hospital_phone: base?.hospital_phone ?? '',
+    hospital_distance: base?.hospital_distance ?? '',
     notes: planDocument?.notes ?? '',
   })
 
@@ -402,6 +407,12 @@ export default function DocumentClient({
               行事名・日程・参加者名簿などは計画と参加者のプロフィールから自動反映されます。
               グループのメンバーなら<strong>誰でも編集・保存できます</strong>（分担して入力できます）。
             </p>
+            {carriedOver && (
+              <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs leading-5 text-green-700">
+                💡 顧問教員・宛先・宿泊所・病院などを、<strong>前回の計画書から引き継ぎ</strong>ました。
+                内容を確認して、今回に合わせて修正してください。
+              </p>
+            )}
           </div>
 
           <FormBlock title="代表者">
