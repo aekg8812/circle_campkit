@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -10,6 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import PasswordInput from '@/components/PasswordInput'
 import { EmptyState } from '@/components/EmptyState'
+import { useDialogDismiss } from '@/components/useDialogDismiss'
 
 type Group = {
   id: string
@@ -53,11 +54,13 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
     reset()
   }
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setJoiningGroup(null)
     setJoinError(null)
     reset()
-  }
+  }, [reset])
+
+  useDialogDismiss(closeModal, joiningGroup != null)
 
   const onJoin = async (data: JoinForm) => {
     if (!joiningGroup) return
@@ -176,8 +179,11 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       {/* 参加モーダル */}
       {joiningGroup && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
           onClick={closeModal}
+          role="dialog"
+          aria-modal="true"
+          aria-label="グループに参加"
         >
           <div
             className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4"

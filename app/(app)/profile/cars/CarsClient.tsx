@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 const schema = z.object({
   name: z.string().optional().nullable(),
@@ -27,6 +28,7 @@ type Props = {
 
 export default function CarsClient({ initialCars, userId }: Props) {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [cars, setCars] = useState<Car[]>(initialCars)
   const [editing, setEditing] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -80,7 +82,15 @@ export default function CarsClient({ initialCars, userId }: Props) {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('この車を削除しますか？')) return
+    if (
+      !(await confirm({
+        title: 'この車を削除しますか？',
+        confirmLabel: '削除する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     const { error } = await supabase.from('cars').delete().eq('id', id)
     if (error) { setServerError(error.message); return }
     setCars((prev) => prev.filter((c) => c.id !== id))

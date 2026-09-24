@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useState, useRef } from 'react'
+import { useConfirm } from '@/components/ConfirmDialog'
 import Image from 'next/image'
 
 const CATEGORIES = ['テント', '寝袋', '調理', 'テーブル・チェア', '照明', 'その他']
@@ -35,6 +36,7 @@ type Props = {
 
 export default function GearClient({ initialGear, userId }: Props) {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [gearList, setGearList] = useState<Gear[]>(initialGear)
   const [editing, setEditing] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -131,7 +133,15 @@ export default function GearClient({ initialGear, userId }: Props) {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('この道具を削除しますか？')) return
+    if (
+      !(await confirm({
+        title: 'この道具を削除しますか？',
+        confirmLabel: '削除する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     const { error } = await supabase.from('gear').delete().eq('id', id)
     if (error) { setServerError(error.message); return }
     setGearList((prev) => prev.filter((g) => g.id !== id))

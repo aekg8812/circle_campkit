@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -12,6 +12,8 @@ import { useToast } from '@/components/Toast'
 import { buildShareUrl } from '@/lib/liffUrl'
 import { formatJpDateRange } from '@/lib/formatDate'
 import FirstTimeNote from '@/components/FirstTimeNote'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { useDialogDismiss } from '@/components/useDialogDismiss'
 import PasswordInput from '@/components/PasswordInput'
 import {
   formatCapacity,
@@ -122,6 +124,7 @@ export default function DashboardClient({
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
+  const confirm = useConfirm()
   // 参加パスワードの変更は「グループの作成者」だけができる（サーバ側の認可と一致させる）
   const isGroupCreator = group.created_by === currentUserId
   const myPosition =
@@ -162,6 +165,14 @@ export default function DashboardClient({
   const [pwError, setPwError] = useState<string | null>(null)
   // グループの名前・画像の編集（メンバーなら誰でも）
   const [showEditModal, setShowEditModal] = useState(false)
+
+  // どのモーダルも Escape で閉じられるようにする
+  const closeQr = useCallback(() => setShowQr(false), [])
+  const closePwModal = useCallback(() => setShowPwModal(false), [])
+  const closeEditModal = useCallback(() => setShowEditModal(false), [])
+  useDialogDismiss(closeQr, showQr)
+  useDialogDismiss(closePwModal, showPwModal)
+  useDialogDismiss(closeEditModal, showEditModal)
   const [editName, setEditName] = useState(group.name)
   const [editImageUrl, setEditImageUrl] = useState(group.image_url)
   const [editSaving, setEditSaving] = useState(false)
@@ -302,7 +313,16 @@ export default function DashboardClient({
   }
 
   const handleLeave = async () => {
-    if (!confirm(`「${group.name}」から脱退しますか？`)) return
+    if (
+      !(await confirm({
+        title: `「${group.name}」から脱退しますか？`,
+        message: 'このグループの計画が見られなくなります。参加し直すにはパスワードが必要です。',
+        confirmLabel: '脱退する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     setLeaving(true)
     setLeaveError(null)
     const { error } = await supabase.rpc('leave_group', {

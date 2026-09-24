@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
@@ -12,6 +12,8 @@ import { formatJpDate, formatJpDateRange, formatJpDateTime } from '@/lib/formatD
 import { pickMeetingItem } from '@/lib/meetingPoint'
 import MeetingCard from '@/components/MeetingCard'
 import FirstTimeNote from '@/components/FirstTimeNote'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { useDialogDismiss } from '@/components/useDialogDismiss'
 import { getMissingDocumentFields, type ProfileLike } from '@/lib/profileCompleteness'
 import { useToast } from '@/components/Toast'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -165,10 +167,13 @@ export default function PlanDetailClient({
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
+  const confirm = useConfirm()
   const isCreator = plan.creator_id === currentUserId
   const missingProfileFields = getMissingDocumentFields(currentUserProfile)
   // 参加直後に持ち物・車を登録してもらうモーダル
   const [showPrepModal, setShowPrepModal] = useState(false)
+  const closePrepModal = useCallback(() => setShowPrepModal(false), [])
+  useDialogDismiss(closePrepModal, showPrepModal)
   const [selectedGearIds, setSelectedGearIds] = useState<string[]>([])
   const [selectedCarIds, setSelectedCarIds] = useState<string[]>([])
   const [prepSaving, setPrepSaving] = useState(false)
@@ -465,9 +470,11 @@ export default function PlanDetailClient({
     if (missingProfileFields.length > 0) {
       const labels = missingProfileFields.map((field) => field.label).join('・')
       if (
-        !confirm(
-          `プロフィールの「${labels}」が未入力です。\nこのまま参加すると計画書の名簿でこれらが空欄になります。参加しますか？`
-        )
+        !(await confirm({
+          title: 'プロフィールに未入力があります',
+          message: `未入力：${labels}\n\nこのまま参加すると、計画書の名簿でこれらが空欄になります。`,
+          confirmLabel: 'このまま参加する',
+        }))
       ) {
         return
       }
@@ -498,7 +505,16 @@ export default function PlanDetailClient({
 
   const leavePlan = async () => {
     if (!myParticipant) return
-    if (!confirm('この計画の参加をキャンセルしますか？')) return
+    if (
+      !(await confirm({
+        title: 'この計画の参加をキャンセルしますか？',
+        confirmLabel: 'キャンセルする',
+        cancelLabel: 'やめる',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
 
     setServerError(null)
     setSubmitting('participant')
@@ -560,7 +576,15 @@ export default function PlanDetailClient({
 
   const deleteReview = async () => {
     if (!myReview) return
-    if (!confirm('自分のレビューを削除しますか？')) return
+    if (
+      !(await confirm({
+        title: '自分のレビューを削除しますか？',
+        confirmLabel: '削除する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
 
     setServerError(null)
     setSubmitting('review')
@@ -582,9 +606,11 @@ export default function PlanDetailClient({
   // 募集を締め切る → 自動的に「準備中」フェーズへ進む
   const closeRecruitment = async () => {
     if (
-      !confirm(
-        '募集を締め切りますか？\n締め切ると「準備中」に進み、これ以上の参加はできなくなります。'
-      )
+      !(await confirm({
+        title: '募集を締め切りますか？',
+        message: '締め切ると「準備中」に進み、これ以上の参加はできなくなります。',
+        confirmLabel: '締め切る',
+      }))
     ) {
       return
     }
@@ -616,9 +642,12 @@ export default function PlanDetailClient({
 
   const duplicatePlan = async () => {
     if (
-      !confirm(
-        'この計画を複製しますか？\n\n複製した計画は「自分の計画」タブに未公開で追加されます（日程は未設定）。\n続けて日程などを編集できます。'
-      )
+      !(await confirm({
+        title: 'この計画を複製しますか？',
+        message:
+          '複製した計画は「自分の計画」タブに未公開で追加されます（日程は未設定）。\n続けて日程などを編集できます。',
+        confirmLabel: '複製する',
+      }))
     ) {
       return
     }
@@ -770,9 +799,13 @@ export default function PlanDetailClient({
 
   const deletePlan = async () => {
     if (
-      !confirm(
-        'この計画を削除しますか？\n行程・募集・参加者・計画書もすべて削除され、元に戻せません。'
-      )
+      !(await confirm({
+        title: 'この計画を削除しますか？',
+        message:
+          '行程・募集・参加者・提出書類もすべて削除され、元に戻せません。',
+        confirmLabel: '完全に削除する',
+        tone: 'danger',
+      }))
     ) {
       return
     }
@@ -796,7 +829,15 @@ export default function PlanDetailClient({
     table: 'schedule_items',
     id: string
   ) => {
-    if (!confirm('削除しますか？')) return
+    if (
+      !(await confirm({
+        title: 'この行程を削除しますか？',
+        confirmLabel: '削除する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     setServerError(null)
 
     const { error } = await supabase.from(table).delete().eq('id', id)

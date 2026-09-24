@@ -5,6 +5,7 @@ import LogoutButton from '@/components/LogoutButton'
 import BottomNav from '@/components/BottomNav'
 import AppBackdrop from '@/components/AppBackdrop'
 import { ToastProvider } from '@/components/Toast'
+import { ConfirmProvider } from '@/components/ConfirmDialog'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <ToastProvider>
+      <ConfirmProvider>
       <div className="app-surface relative min-h-screen">
         <AppBackdrop />
         <header className="sticky top-0 z-10 border-b border-gray-200/70 bg-white/70 backdrop-blur-md print:hidden">
@@ -44,6 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
         <BottomNav />
       </div>
+      </ConfirmProvider>
     </ToastProvider>
   )
 }

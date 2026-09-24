@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
 import { PLAN_TEMPLATES, type PlanTemplate } from '@/lib/planTemplates'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 type Group = {
   id: string
@@ -60,6 +61,7 @@ function addDays(base: Date, days: number): string {
 export default function NewPlanClient({ group, currentUserId }: Props) {
   const router = useRouter()
   const supabase = createClient()
+  const confirm = useConfirm()
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
@@ -90,10 +92,16 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
   const [rows, setRows] = useState<ScheduleRow[]>([emptyRow()])
 
   // テンプレートを選んで一括入力する
-  const applyTemplate = (template: PlanTemplate) => {
+  const applyTemplate = async (template: PlanTemplate) => {
+    const hasInput =
+      basic.title.trim() !== '' || rows.some((row) => row.location_name.trim() !== '')
     if (
-      (basic.title.trim() !== '' || rows.some((row) => row.location_name.trim() !== '')) &&
-      !confirm('入力中の内容をテンプレートの内容で置き換えます。よろしいですか？')
+      hasInput &&
+      !(await confirm({
+        title: 'テンプレートで置き換えますか？',
+        message: '入力中の内容は、テンプレートの内容で上書きされます。',
+        confirmLabel: '置き換える',
+      }))
     ) {
       return
     }
