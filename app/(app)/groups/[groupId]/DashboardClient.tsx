@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { useToast } from '@/components/Toast'
+import { buildShareUrl } from '@/lib/liffUrl'
 import PasswordInput from '@/components/PasswordInput'
 import {
   formatCapacity,
@@ -243,7 +244,8 @@ export default function DashboardClient({
   }
 
   useEffect(() => {
-    setInviteUrl(`${window.location.origin}/groups?join=${group.id}`)
+    // LIFF URL にしておくと、トークでタップしたときLINEアプリ内でそのまま開く
+    setInviteUrl(buildShareUrl(`/groups?join=${group.id}`))
   }, [group.id])
 
   const openQr = async () => {
