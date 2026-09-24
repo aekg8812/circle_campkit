@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import GearClient from './GearClient'
 
+export const metadata = { title: '道具の登録' }
+
 export default async function GearPage() {
   const supabase = await createClient()
   const {

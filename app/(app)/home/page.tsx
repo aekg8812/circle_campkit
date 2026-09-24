@@ -19,6 +19,8 @@ function isoDateAfterDays(days: number) {
   return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)
 }
 
+export const metadata = { title: 'ホーム' }
+
 export default async function HomePage() {
   const supabase = await createClient()
   const {

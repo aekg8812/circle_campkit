@@ -4,6 +4,8 @@ import Link from 'next/link'
 import ProfileTabs from './ProfileTabs'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
 
+export const metadata = { title: 'プロフィール' }
+
 export default async function ProfilePage({
   searchParams,
 }: {

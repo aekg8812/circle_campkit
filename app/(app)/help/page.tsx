@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'ヘルプ・使い方ガイド | CampKit',
+  title: 'ヘルプ・使い方ガイド',
 }
 
 // はじめての人向けのヘルプページ。

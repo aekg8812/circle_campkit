@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import NewPlanClient from './NewPlanClient'
 
+export const metadata = { title: '計画を作成' }
+
 export default async function NewPlanPage({
   params,
 }: {

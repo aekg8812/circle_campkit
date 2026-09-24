@@ -2,6 +2,22 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardClient from './DashboardClient'
 
+// タブ・履歴・共有時のプレビューでグループを見分けられるようにする
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ groupId: string }>
+}) {
+  const { groupId } = await params
+  const supabase = await createClient()
+  const { data: group } = await supabase
+    .from('groups')
+    .select('name')
+    .eq('id', groupId)
+    .maybeSingle()
+  return { title: group?.name ?? 'グループ' }
+}
+
 export default async function GroupDashboardPage({
   params,
 }: {
