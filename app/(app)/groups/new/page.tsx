@@ -21,6 +21,12 @@ const schema = z
   })
 type FormValues = z.infer<typeof schema>
 
+/** アップロード先のパスを作る。時刻を使うため、描画とは切り離してモジュール側に置く */
+function buildGroupImagePath(userId: string, fileName: string) {
+  const ext = fileName.split('.').pop()
+  return `${userId}/${Date.now()}.${ext}`
+}
+
 const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500'
 
@@ -57,8 +63,7 @@ export default function NewGroupPage() {
 
     let imageUrl: string | null = null
     if (imageFile) {
-      const ext = imageFile.name.split('.').pop()
-      const path = `${user.id}/${Date.now()}.${ext}`
+      const path = buildGroupImagePath(user.id, imageFile.name)
       const { error: uploadError } = await supabase.storage
         .from('group-images')
         .upload(path, imageFile)

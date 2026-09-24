@@ -156,7 +156,6 @@ export default async function PlanDocumentPage({
       previousDocument={previousDocument}
       creatorProfile={creatorProfile}
       leaderProfile={leaderProfile}
-      currentUserId={user.id}
     />
   )
 }

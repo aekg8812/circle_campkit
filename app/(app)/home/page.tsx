@@ -12,6 +12,11 @@ import {
   type RecruitmentInfo,
 } from '@/lib/recruitmentStatus'
 
+/** 今日から指定日数後の日付（YYYY-MM-DD）。時刻を使うため描画とは切り離す */
+function isoDateAfterDays(days: number) {
+  return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)
+}
+
 export default async function HomePage() {
   const supabase = await createClient()
   const {
@@ -75,7 +80,7 @@ export default async function HomePage() {
       : { data: [] }
 
   const today = new Date().toISOString().slice(0, 10)
-  const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const in7Days = isoDateAfterDays(7)
   const myParticipantPlanIds = new Set((myParticipations ?? []).map((p) => p.plan_id))
 
   // ★やることリスト（自分に関する未対応をまとめる）

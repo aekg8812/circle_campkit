@@ -31,10 +31,14 @@ type JoinForm = z.infer<typeof joinSchema>
 export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId }: Props) {
   const router = useRouter()
   const supabase = createClient()
-  const [joiningGroup, setJoiningGroup] = useState<Group | null>(null)
+  // 招待リンク（?join=...）で来た場合は、最初からそのグループの参加モーダルを開く
+  const [joiningGroup, setJoiningGroup] = useState<Group | null>(() =>
+    initialJoinGroupId
+      ? (otherGroups.find((group) => group.id === initialJoinGroupId) ?? null)
+      : null
+  )
   const [joinError, setJoinError] = useState<string | null>(null)
   const [searchText, setSearchText] = useState('')
-  const [handledInitialJoin, setHandledInitialJoin] = useState(false)
 
   const {
     register,
@@ -81,22 +85,12 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
     )
   }, [normalizedSearch, otherGroups])
 
+  // すでに参加しているグループの招待リンクなら、そのグループのページへ送る
   useEffect(() => {
-    if (handledInitialJoin || !initialJoinGroupId) return
-
-    const alreadyJoined = myGroups.some((group) => group.id === initialJoinGroupId)
-    if (alreadyJoined) {
-      router.replace(`/groups/${initialJoinGroupId}`)
-      setHandledInitialJoin(true)
-      return
-    }
-
-    const invitedGroup = otherGroups.find((group) => group.id === initialJoinGroupId)
-    if (invitedGroup) {
-      openJoinModal(invitedGroup)
-    }
-    setHandledInitialJoin(true)
-  }, [handledInitialJoin, initialJoinGroupId, myGroups, otherGroups, router])
+    if (!initialJoinGroupId) return
+    if (!myGroups.some((group) => group.id === initialJoinGroupId)) return
+    router.replace(`/groups/${initialJoinGroupId}`)
+  }, [initialJoinGroupId, myGroups, router])
 
   return (
     <div className="space-y-8">

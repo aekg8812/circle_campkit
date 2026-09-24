@@ -27,6 +27,11 @@ const schema = z.object({
 })
 type FormValues = z.infer<typeof schema>
 
+/** 画像を差し替えた直後に古い画像が表示されないよう、URLにキャッシュ避けを付ける */
+function withCacheBuster(url: string) {
+  return `${url}?t=${Date.now()}`
+}
+
 type Profile = {
   id: string
   name: string
@@ -86,7 +91,7 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
       return
     }
     const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-    const publicUrl = data.publicUrl + `?t=${Date.now()}`
+    const publicUrl = withCacheBuster(data.publicUrl)
     await supabase
       .from('profiles')
       .update({ avatar_url: data.publicUrl })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -113,7 +113,6 @@ export default function DashboardClient({
   const [leaving, setLeaving] = useState(false)
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const [inviteCopied, setInviteCopied] = useState(false)
-  const [inviteUrl, setInviteUrl] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [showQr, setShowQr] = useState(false)
   const [showPwModal, setShowPwModal] = useState(false)
@@ -243,30 +242,28 @@ export default function DashboardClient({
     toast('参加パスワードを変更しました')
   }
 
-  useEffect(() => {
-    // LIFF URL にしておくと、トークでタップしたときLINEアプリ内でそのまま開く
-    setInviteUrl(buildShareUrl(`/groups?join=${group.id}`))
-  }, [group.id])
+  // 招待URL。押されたときに組み立てれば十分なので、状態としては持たない。
+  // LIFF URL にしておくと、トークでタップしたときLINEアプリ内でそのまま開く。
+  const getInviteUrl = () => buildShareUrl(`/groups?join=${group.id}`)
 
   const openQr = async () => {
-    if (!inviteUrl) return
     // 招待URLからQRコードの画像（データURL）を生成してモーダルで表示
-    const dataUrl = await QRCode.toDataURL(inviteUrl, { width: 480, margin: 2 })
+    const dataUrl = await QRCode.toDataURL(getInviteUrl(), { width: 480, margin: 2 })
     setQrDataUrl(dataUrl)
     setShowQr(true)
   }
 
   const copyInviteUrl = async () => {
-    if (!inviteUrl) return
-
-    await navigator.clipboard.writeText(inviteUrl)
+    await navigator.clipboard.writeText(getInviteUrl())
     setInviteCopied(true)
     window.setTimeout(() => setInviteCopied(false), 2000)
   }
 
-  const lineShareUrl = () => {
+  const shareOnLine = () => {
+    const inviteUrl = getInviteUrl()
     const text = `CampKitで「${group.name}」に参加してください。\n${inviteUrl}\n参加パスワードは別途共有します。`
-    return `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(text)}`
+    const shareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(text)}`
+    window.open(shareUrl, '_blank', 'noopener,noreferrer')
   }
 
   const handleLeave = async () => {
@@ -347,18 +344,13 @@ export default function DashboardClient({
                   >
                     QRコード
                   </button>
-                  <a
-                    href={inviteUrl ? lineShareUrl() : '#'}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(event) => {
-                      if (!inviteUrl) event.preventDefault()
-                    }}
-                    aria-disabled={!inviteUrl}
-                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-green-700 aria-disabled:opacity-50"
+                  <button
+                    type="button"
+                    onClick={shareOnLine}
+                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-green-700"
                   >
                     LINEで招待
-                  </a>
+                  </button>
                 </div>
               </div>
 
