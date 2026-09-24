@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { LiffProvider } from "@/components/LiffProvider";
 
 // スマホ・PCで画面幅にきちんと合わせる（横方向にはみ出して極端に拡大されるのを防ぐ）
 export const viewport: Viewport = {
@@ -34,7 +35,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <LiffProvider>{children}</LiffProvider>
+      </body>
     </html>
   );
 }

@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
+import LineLoginButton from '@/components/LineLoginButton'
 
 const schema = z.object({
   name: z.string().min(1, '名前を入力してください'),
@@ -147,6 +148,8 @@ export default function SignupPage() {
             {isSubmitting ? '登録中...' : 'アカウント作成'}
           </button>
         </form>
+
+      <LineLoginButton />
 
       <p className="text-sm text-center text-gray-500 mt-6">
         すでにアカウントをお持ちの方は{' '}
