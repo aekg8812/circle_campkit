@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
+import { formatJpDateRange } from '@/lib/formatDate'
+import { formatMeetingTime, pickMeetingItem } from '@/lib/meetingPoint'
 import {
   formatCapacity,
   formatDeadline,
@@ -171,7 +173,7 @@ export default async function HomePage() {
     ])
   )
 
-  // 締め切られた（＝実施）・実施日を過ぎた（＝過去）ものは参加できないので出さない
+  // 締め切られた（＝準備中）・実施日を過ぎた（＝過去）ものは参加できないので出さない
   const recruitingOpen = openPlans
     .filter(
       (plan) =>
@@ -189,13 +191,39 @@ export default async function HomePage() {
     .map((plan) => ({
       ...plan,
       kind: 'recruiting' as const,
+      meetingLabel: null,
       recruitment: recruitmentByPlan[plan.id] ?? null,
       participantCount: openCounts[plan.id] ?? 0,
     }))
 
+  // 参加確定の計画は「いつ・どこ集合か」までカードに出す
+  const confirmedIds = confirmedSoon.map((plan) => plan.id)
+  const { data: confirmedScheduleItems } =
+    confirmedIds.length > 0
+      ? await supabase
+          .from('schedule_items')
+          .select('plan_id, day, time, sort_order, time_label, location_name')
+          .in('plan_id', confirmedIds)
+          .order('day', { ascending: true, nullsFirst: false })
+          .order('time', { ascending: true, nullsFirst: false })
+          .order('sort_order', { ascending: true })
+      : { data: [] }
+
+  const meetingLabelByPlan: Record<string, string> = {}
+  for (const planId of confirmedIds) {
+    const items = (confirmedScheduleItems ?? []).filter((item) => item.plan_id === planId)
+    const meeting = pickMeetingItem(items)
+    if (!meeting) continue
+    const label = [formatMeetingTime(meeting.time), meeting.location_name]
+      .filter(Boolean)
+      .join(' ')
+    if (label) meetingLabelByPlan[planId] = label
+  }
+
   const upcoming = [
     ...confirmedSoon.map((plan) => ({
       ...plan,
+      meetingLabel: meetingLabelByPlan[plan.id] ?? null,
       recruitment: null,
       participantCount: 0,
     })),
@@ -310,6 +338,7 @@ type UpcomingItem = {
   start_date: string | null
   end_date: string | null
   kind: 'confirmed' | 'recruiting'
+  meetingLabel: string | null
   recruitment: RecruitmentInfo | null
   participantCount: number
 }
@@ -350,12 +379,7 @@ function UpcomingCard({
   groupName: string
   today: string
 }) {
-  const dateLabel =
-    item.start_date && item.end_date && item.start_date !== item.end_date
-      ? `${formatJpDate(item.start_date)} 〜 ${formatJpDate(item.end_date)}`
-      : item.start_date
-        ? formatJpDate(item.start_date)
-        : '日程未定'
+  const dateLabel = formatJpDateRange(item.start_date, item.end_date) || '日程未定'
 
   const href = `/groups/${item.group_id}/plans/${item.id}`
 
@@ -384,6 +408,11 @@ function UpcomingCard({
             {groupName && `${groupName}・`}
             {dateLabel}
           </p>
+          {item.meetingLabel && (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white/20 px-2.5 py-1 text-sm font-semibold backdrop-blur-sm">
+              📍 {item.meetingLabel}
+            </p>
+          )}
         </div>
       </Link>
     )
@@ -491,12 +520,6 @@ function getCountdownLabel(startDate: string | null, today: string): string | nu
   if (diffDays <= 0) return '開催中・当日'
   if (diffDays === 1) return '明日'
   return `あと${diffDays}日`
-}
-
-function formatJpDate(value: string): string {
-  const [, month, day] = value.split('-').map(Number)
-  if (!month || !day) return value
-  return `${month}月${day}日`
 }
 
 /** グループ未参加のユーザー向けの案内 */

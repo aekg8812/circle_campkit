@@ -1,21 +1,17 @@
 // 募集の「締切状況」と「定員状況」の表示ロジック。
 // グループの計画一覧とホームの募集中カードで共有する。
 
+import { formatJpDateTime } from '@/lib/formatDate'
+
 export type RecruitmentInfo = {
   deadline: string | null
   capacity: number | null
   is_closed: boolean | null
 }
 
-/** 締切日時を「7/18 18:00」形式にする */
+/** 締切日時を「7/18(金) 18:00」形式にする */
 export function formatDeadline(deadline: string): string {
-  const date = new Date(deadline)
-  if (Number.isNaN(date.getTime())) return ''
-  const month = date.getMonth() + 1
-  const day = date.getDate()
-  const hh = String(date.getHours()).padStart(2, '0')
-  const mm = String(date.getMinutes()).padStart(2, '0')
-  return `${month}/${day} ${hh}:${mm}`
+  return formatJpDateTime(deadline)
 }
 
 /** 締切までの残り状況（「あと3日」「本日締切」「締切済」など）と色 */
@@ -92,10 +88,10 @@ export function todayLocal(now: Date = new Date()): string {
 
 /**
  * 表示用のフェーズを求める。状態遷移は一方向（不可逆）:
- *   下書き →（募集開始）→ 募集中 →（締切/定員/締め切り操作）→ 実施 →（実施日経過）→ 過去
+ *   下書き →（募集開始）→ 募集中 →（締切/定員/締め切り操作）→ 準備中 →（実施日経過）→ 過去
  *
- * 「実施」と「過去」はDBの状態を書き換えずに自動判定する。
- * これにより、実施日を過ぎた計画が「募集中/実施」のまま残る問題が起きない。
+ * 「準備中」と「過去」はDBの状態を書き換えずに自動判定する。
+ * これにより、実施日を過ぎた計画が「募集中/準備中」のまま残る問題が起きない。
  */
 export function getPlanPhase(params: {
   status: string | null | undefined
@@ -116,7 +112,7 @@ export function getPlanPhase(params: {
   const lastDay = endDate || startDate
   if (lastDay && lastDay < today) return 'past'
 
-  // 募集が締め切られていれば「実施」
+  // 募集が締め切られていれば「準備中」
   if (recruitmentClosed) return 'in_progress'
 
   return 'recruiting'

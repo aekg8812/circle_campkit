@@ -20,6 +20,7 @@ import {
 } from '@/lib/planDocument'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
 import { useToast } from '@/components/Toast'
+import FirstTimeNote from '@/components/FirstTimeNote'
 
 type Group = { id: string; name: string }
 
@@ -604,7 +605,9 @@ export default function DocumentClient({
       {/* メールで提出する方法（送信はせず、手順とコピペ用の定型文を案内） */}
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/[0.03] print:hidden">
         <h2 className="text-sm font-bold text-gray-700">📧 メールで提出する方法</h2>
-        <p className="mt-1 text-xs text-gray-500">
+        <div className="mt-1">
+          <FirstTimeNote id="document-mail" label="提出の手順を見る">
+        <p className="text-xs text-gray-500">
           このアプリからは送信しません。下の手順で、ご自身のメールから学務係・指導教員へ提出してください。
         </p>
 
@@ -625,6 +628,8 @@ export default function DocumentClient({
             </li>
           ))}
         </ol>
+          </FirstTimeNote>
+        </div>
 
         <div className="mt-4 space-y-3">
           <div className="rounded-xl border border-gray-100 p-3">

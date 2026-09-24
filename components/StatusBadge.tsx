@@ -1,9 +1,9 @@
 // 計画の状態バッジ。色を全画面で統一する
-// （未公開=グレー / 募集中=緑 / 実施=インディゴ / 過去=青）。
+// （未公開=グレー / 募集中=緑 / 準備中=インディゴ / 過去=青）。
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   draft: { label: '未公開', className: 'bg-gray-100 text-gray-600' },
   recruiting: { label: '募集中', className: 'bg-green-100 text-green-700' },
-  in_progress: { label: '実施', className: 'bg-indigo-100 text-indigo-700' },
+  in_progress: { label: '準備中', className: 'bg-indigo-100 text-indigo-700' },
   past: { label: '過去', className: 'bg-sky-100 text-sky-700' },
 }
 
