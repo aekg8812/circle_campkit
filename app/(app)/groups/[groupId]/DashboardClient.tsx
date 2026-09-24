@@ -10,6 +10,8 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { useToast } from '@/components/Toast'
 import { buildShareUrl } from '@/lib/liffUrl'
+import { formatJpDateRange } from '@/lib/formatDate'
+import FirstTimeNote from '@/components/FirstTimeNote'
 import PasswordInput from '@/components/PasswordInput'
 import {
   formatCapacity,
@@ -58,6 +60,7 @@ type Props = {
   plans: Plan[]
   recruitmentByPlan: Record<string, RecruitmentInfo>
   participantCounts: Record<string, number>
+  myParticipantPlanIds: string[]
   currentUserId: string
 }
 
@@ -72,12 +75,48 @@ const sortOptions: { value: SortKey; label: string }[] = [
   { value: 'created_asc', label: '作成が古い順' },
 ]
 
+/** 計画の表示フェーズを求める */
+function planPhaseOf(
+  plan: Plan,
+  recruitmentByPlan: Record<string, RecruitmentInfo>,
+  participantCounts: Record<string, number>
+) {
+  return getPlanPhase({
+    status: plan.status,
+    recruitmentClosed: isRecruitmentClosed(
+      recruitmentByPlan[plan.id],
+      participantCounts[plan.id] ?? 0
+    ),
+    startDate: plan.start_date,
+    endDate: plan.end_date,
+  })
+}
+
+/**
+ * 最初に開くタブを決める。
+ * 常に「募集中」から始めると、募集が無い時期に空の画面が出てしまうため、
+ * 中身のあるタブを選ぶ。
+ */
+function pickInitialTab(
+  plans: Plan[],
+  recruitmentByPlan: Record<string, RecruitmentInfo>,
+  participantCounts: Record<string, number>
+): PlanTab {
+  const order: PlanTab[] = ['recruiting', 'in_progress', 'past']
+  return (
+    order.find((tab) =>
+      plans.some((plan) => planPhaseOf(plan, recruitmentByPlan, participantCounts) === tab)
+    ) ?? 'recruiting'
+  )
+}
+
 export default function DashboardClient({
   group,
   members,
   plans,
   recruitmentByPlan,
   participantCounts,
+  myParticipantPlanIds,
   currentUserId,
 }: Props) {
   const router = useRouter()
@@ -108,7 +147,9 @@ export default function DashboardClient({
     toast('役職を変更しました')
     router.refresh()
   }
-  const [activeTab, setActiveTab] = useState<PlanTab>('recruiting')
+  const [activeTab, setActiveTab] = useState<PlanTab>(() =>
+    pickInitialTab(plans, recruitmentByPlan, participantCounts)
+  )
   const [sortKey, setSortKey] = useState<SortKey>('created_desc')
   const [leaving, setLeaving] = useState(false)
   const [leaveError, setLeaveError] = useState<string | null>(null)
@@ -168,19 +209,13 @@ export default function DashboardClient({
     router.refresh()
   }
   // 表示フェーズを計画ごとに求める
-  // （締め切られたら「実施」、実施日を過ぎたら「過去」に自動で移る）
-  const phaseOf = (plan: Plan) =>
-    getPlanPhase({
-      status: plan.status,
-      recruitmentClosed: isRecruitmentClosed(
-        recruitmentByPlan[plan.id],
-        participantCounts[plan.id] ?? 0
-      ),
-      startDate: plan.start_date,
-      endDate: plan.end_date,
-    })
+  // （締め切られたら「準備中」、実施日を過ぎたら「過去」に自動で移る）
+  const phaseOf = (plan: Plan) => planPhaseOf(plan, recruitmentByPlan, participantCounts)
 
-  // タブ: 募集中／実施／過去／自分の計画（自分が作成した全ての計画）
+  // 参加中の判定に使う
+  const myPlanIds = new Set(myParticipantPlanIds)
+
+  // タブ: 募集中／準備中／過去／自分の計画（自分が作成した全ての計画）
   const filteredPlans =
     activeTab === 'mine'
       ? plans.filter((plan) => plan.creator_id === currentUserId)
@@ -496,9 +531,13 @@ export default function DashboardClient({
             ＋ 計画を作成
           </Link>
         </div>
-        <p className="mb-3 text-xs text-gray-500">
-          キャンプ・合宿などの「計画」を作って、募集・参加・提出書類づくりまでできます。「＋ 計画を作成」から始めましょう（テンプレートも使えます）。
-        </p>
+        <div className="mb-3">
+          <FirstTimeNote id="group-plans" label="計画とは">
+            <p className="text-xs text-gray-500">
+              キャンプ・合宿などの「計画」を作って、募集・参加・提出書類づくりまでできます。「＋ 計画を作成」から始めましょう（テンプレートも使えます）。
+            </p>
+          </FirstTimeNote>
+        </div>
         <div className="bg-white rounded-2xl shadow-sm">
           <div className="flex border-b border-gray-100">
             <PlanTabButton
@@ -507,7 +546,7 @@ export default function DashboardClient({
               onClick={() => setActiveTab('recruiting')}
             />
             <PlanTabButton
-              label="実施"
+              label="準備中"
               active={activeTab === 'in_progress'}
               onClick={() => setActiveTab('in_progress')}
             />
@@ -552,7 +591,7 @@ export default function DashboardClient({
                   : activeTab === 'recruiting'
                     ? '募集中の計画はありません'
                     : activeTab === 'in_progress'
-                      ? '実施フェーズの計画はありません'
+                      ? '準備中の計画はありません'
                       : '過去の計画はありません'
               }
               description={
@@ -591,7 +630,7 @@ export default function DashboardClient({
                           {plan.title}
                         </p>
                         <p className="mt-1 text-xs text-gray-500">
-                          {[plan.category, formatDateRange(plan.start_date, plan.end_date), plan.area]
+                          {[plan.category, formatJpDateRange(plan.start_date, plan.end_date), plan.area]
                             .filter(Boolean)
                             .join(' ／ ') || '日程・場所未設定'}
                         </p>
@@ -631,10 +670,16 @@ export default function DashboardClient({
                         )}
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-1.5">
-                        {plan.creator_id === currentUserId && (
+                        {plan.creator_id === currentUserId ? (
                           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
                             起案者
                           </span>
+                        ) : (
+                          myPlanIds.has(plan.id) && (
+                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                              参加中
+                            </span>
+                          )
                         )}
                         <StatusBadge status={phase} />
                       </div>
@@ -850,11 +895,5 @@ function PlanTabButton({
   )
 }
 
-function formatDateRange(startDate: string | null, endDate: string | null) {
-  if (!startDate && !endDate) return ''
-  if (startDate && endDate && startDate !== endDate) {
-    return `${startDate} 〜 ${endDate}`
-  }
-  return startDate || endDate || ''
-}
+
 

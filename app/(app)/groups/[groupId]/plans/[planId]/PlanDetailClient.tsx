@@ -8,6 +8,10 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
 import { createGoogleMapsSearchUrl } from '@/lib/maps'
+import { formatJpDate, formatJpDateRange, formatJpDateTime } from '@/lib/formatDate'
+import { pickMeetingItem } from '@/lib/meetingPoint'
+import MeetingCard from '@/components/MeetingCard'
+import FirstTimeNote from '@/components/FirstTimeNote'
 import { getMissingDocumentFields, type ProfileLike } from '@/lib/profileCompleteness'
 import { useToast } from '@/components/Toast'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -210,7 +214,7 @@ export default function PlanDetailClient({
     recruitment?.capacity != null && participants.length >= recruitment.capacity
   // 締切は「時間締切」「先着順＆時間締切」の両方で使う
   const deadlinePassed = isDeadlinePassed(recruitment?.deadline)
-  // 募集が締め切られていれば「実施」、実施日を過ぎていれば「過去」に自動で移る
+  // 募集が締め切られていれば「準備中」、実施日を過ぎていれば「過去」に自動で移る
   const recruitmentClosed = isRecruitmentClosed(recruitment, participants.length)
   const phase: PlanPhase = getPlanPhase({
     status: plan.status,
@@ -221,6 +225,13 @@ export default function PlanDetailClient({
 
   // 参加できるのは「募集中」フェーズのときだけ
   const canJoin = phase === 'recruiting' && !myParticipant
+
+  // 当日の集合と、自分が持っていくもの（終わった計画では出さない）
+  const meetingItem = phase === 'past' ? null : pickMeetingItem(scheduleItems)
+  const myPreparationLabels = preparations
+    .filter((preparation) => preparation.user_id === currentUserId)
+    .map((preparation) => preparation.body ?? '')
+    .filter((body) => body !== '')
 
   const refreshAfterMutation = () => {
     router.refresh()
@@ -568,11 +579,11 @@ export default function PlanDetailClient({
     setSubmitting(null)
   }
 
-  // 募集を締め切る → 自動的に「実施」フェーズへ進む
+  // 募集を締め切る → 自動的に「準備中」フェーズへ進む
   const closeRecruitment = async () => {
     if (
       !confirm(
-        '募集を締め切りますか？\n締め切ると「実施」フェーズに進み、これ以上の参加はできなくなります。'
+        '募集を締め切りますか？\n締め切ると「準備中」に進み、これ以上の参加はできなくなります。'
       )
     ) {
       return
@@ -598,7 +609,7 @@ export default function PlanDetailClient({
       return
     }
 
-    toast('募集を締め切りました。「実施」フェーズに進みます')
+    toast('募集を締め切りました。「準備中」に進みます')
     refreshAfterMutation()
     setSubmitting(null)
   }
@@ -840,6 +851,15 @@ export default function PlanDetailClient({
           )}
         </div>
 
+        {meetingItem && (
+          <div className="mb-4">
+            <MeetingCard
+              item={meetingItem}
+              myItems={myParticipant ? myPreparationLabels : []}
+            />
+          </div>
+        )}
+
         {serverError && (
           <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
             {serverError}
@@ -873,7 +893,7 @@ export default function PlanDetailClient({
 
         {/* 見やすさ優先で、基本情報は タイトル(見出し)・日程・場所・予算 のみ */}
         <dl className="grid gap-4 sm:grid-cols-3">
-          <DetailItem label="日程" value={formatDateRange(plan.start_date, plan.end_date)} />
+          <DetailItem label="日程" value={formatJpDateRange(plan.start_date, plan.end_date)} />
           <DetailItem label="場所" value={plan.area} />
           <DetailItem
             label="一人あたり予算"
@@ -967,7 +987,7 @@ export default function PlanDetailClient({
         missingProfileFields={missingProfileFields}
       />
 
-      {/* 持ち物・準備は、募集を開始してから（募集中・実施）だけ表示する */}
+      {/* 持ち物・準備は、募集を開始してから（募集中・準備中）だけ表示する */}
       {(phase === 'recruiting' || phase === 'in_progress') && (
         <PreparationSection
           preparations={preparations}
@@ -1123,7 +1143,7 @@ export default function PlanDetailClient({
 
 // 状態（下書き/募集中/過去）の意味を説明し、次にとる操作を分かりやすく提示する
 // 計画の状態は一方向にだけ進む（不可逆）:
-//   未公開 →（募集開始）→ 募集中 →（締め切り/締切日時/定員）→ 実施 →（実施日経過）→ 過去
+//   未公開 →（募集開始）→ 募集中 →（締め切り/締切日時/定員）→ 準備中 →（実施日経過）→ 過去
 // 戻す操作は用意しない。各フェーズで「次にやること」だけを提示する。
 function StatusManager({
   phase,
@@ -1154,7 +1174,9 @@ function StatusManager({
             </span>
             <span className="text-xs text-gray-500">＝ 今はあなただけが見られます</span>
           </div>
-          <p className="mt-2 text-sm leading-6 text-amber-800">
+          <div className="mt-2">
+            <FirstTimeNote id="plan-draft" label="未公開とは">
+          <p className="text-sm leading-6 text-amber-800">
             内容がそろったら<strong>「募集を開始」</strong>を押すと、
             <strong>{groupName ? `「${groupName}」の` : ''}グループ全員に公開</strong>され、メンバーが参加できるようになります。
           </p>
@@ -1168,12 +1190,14 @@ function StatusManager({
             </span>
             <span className="text-amber-300">→</span>
             <span className="rounded-full bg-white px-2 py-0.5 text-gray-400 ring-1 ring-gray-200">
-              実施
+              準備中
             </span>
             <span className="text-amber-300">→</span>
             <span className="rounded-full bg-white px-2 py-0.5 text-gray-400 ring-1 ring-gray-200">
               過去
             </span>
+          </div>
+            </FirstTimeNote>
           </div>
         </div>
 
@@ -1206,7 +1230,7 @@ function StatusManager({
         <p className="text-sm font-bold text-green-800">「募集中」です（グループに公開中）</p>
         <p className="mt-1 text-xs leading-5 text-green-700">
           メンバーが参加できます。締切日時を過ぎるか、定員に達するか、下の「募集を締め切る」を押すと、
-          自動的に<strong>「実施」</strong>フェーズへ進みます。
+          自動的に<strong>「準備中」</strong>へ進みます。
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Link href={editHref} className="btn-secondary">
@@ -1223,7 +1247,7 @@ function StatusManager({
   if (phase === 'in_progress') {
     return (
       <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-        <p className="text-sm font-bold text-indigo-800">「実施」フェーズです</p>
+        <p className="text-sm font-bold text-indigo-800">「準備中」です</p>
         <p className="mt-1 text-xs leading-5 text-indigo-700">
           募集は締め切られ、参加者が確定しました。当日に向けて、行程や持ち物を確認しましょう。
           <strong>実施日（終了日）を過ぎると、自動的に「過去」へ移ります。</strong>
@@ -1305,7 +1329,7 @@ function RecruitmentSection({
           <DetailItem label="募集方式" value={recruitmentTypeLabel(recruitment?.type)} />
           <DetailItem label="参加人数" value={participantCountText} />
           {recruitment?.deadline != null && (
-            <DetailItem label="締切" value={formatDateTime(recruitment.deadline)} />
+            <DetailItem label="締切" value={formatJpDateTime(recruitment.deadline)} />
           )}
         </div>
 
@@ -1320,7 +1344,7 @@ function RecruitmentSection({
                   : '参加受付中'}
           </p>
           <p className="mt-1 text-xs text-gray-500">
-            参加登録は現在ログインしている本人の分だけ操作できます。
+            参加登録は、ログインしている本人の分だけ操作できます。
           </p>
         </div>
 
@@ -1343,7 +1367,7 @@ function RecruitmentSection({
                       {participant.profiles?.grade != null
                         ? ` / ${participant.profiles.grade}年生`
                         : ''}
-                      {participant.joined_at ? ` / ${formatDateTime(participant.joined_at)}` : ''}
+                      {participant.joined_at ? ` / ${formatJpDateTime(participant.joined_at)}` : ''}
                     </p>
                   </div>
                 </div>
@@ -1861,15 +1885,15 @@ function ScheduleSection({
               <div className="bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700">
                 {formatScheduleDayLabel(group.day)}
               </div>
-              <div className="divide-y divide-gray-100">
-                {group.items.map((item) => {
+              <div className="py-1">
+                {group.items.map((item, index) => {
                   const mapQuery = item.map_query || item.location_name || ''
                   const mapUrl = createGoogleMapsSearchUrl(mapQuery)
-                  const scheduleMeta = [
-                    item.time?.slice(0, 5) || '時刻未定',
-                    item.time_label,
-                  ].filter(Boolean).join(' ')
+                  const timeText = item.time?.slice(0, 5) || '未定'
                   const transport = item.transport || defaultTransport
+                  // タイムラインの縦線を、最初と最後で余らせないための判定
+                  const isFirst = index === 0
+                  const isLast = index === group.items.length - 1
 
                   // 編集中の行は、その場でフォームに切り替える
                   if (editingId === item.id) {
@@ -1981,53 +2005,82 @@ function ScheduleSection({
                   }
 
                   return (
-                    <div key={item.id} className="px-4 py-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-800">
-                            {scheduleMeta}
-                          </p>
-                          <p className="mt-1 text-sm text-gray-600">
-                            {item.location_name || '場所未設定'}
-                          </p>
-                          {item.note && (
-                            <p className="mt-2 whitespace-pre-wrap rounded-lg bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
-                              {item.note}
+                    <div key={item.id} className="flex gap-3 px-4">
+                      {/* 時刻 */}
+                      <div className="w-12 flex-shrink-0 py-3 text-right text-xs font-bold tabular-nums text-gray-700">
+                        {timeText}
+                      </div>
+
+                      {/* タイムラインの縦線と点 */}
+                      <div className="relative flex w-3 flex-shrink-0 justify-center">
+                        {!(isFirst && isLast) && (
+                          <span
+                            aria-hidden
+                            className={`absolute w-px bg-gray-200 ${
+                              isFirst ? 'bottom-0 top-4' : isLast ? 'top-0 h-4' : 'inset-y-0'
+                            }`}
+                          />
+                        )}
+                        <span
+                          aria-hidden
+                          className={`absolute top-3.5 h-2.5 w-2.5 rounded-full ring-2 ring-white ${
+                            item.time_label === '集合' ? 'bg-green-500' : 'bg-gray-300'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="min-w-0 flex-1 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-gray-800">
+                              <span className="min-w-0 break-words">
+                                {item.location_name || '場所未設定'}
+                              </span>
+                              {item.time_label && (
+                                <span className="flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600">
+                                  {item.time_label}
+                                </span>
+                              )}
                             </p>
-                          )}
-                          {transport && (
-                            <p className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                              交通手段: {transport}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-shrink-0 items-center gap-2">
-                          {mapUrl && (
-                            <a
-                              href={mapUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
-                            >
-                              地図
-                            </a>
-                          )}
-                          {isCreator && (
-                            <>
-                              <button
-                                onClick={() => onStartEdit(item)}
-                                className="text-xs font-semibold text-gray-500 hover:text-green-700"
+                            {item.note && (
+                              <p className="mt-2 whitespace-pre-wrap rounded-lg bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
+                                {item.note}
+                              </p>
+                            )}
+                            {transport && (
+                              <p className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                                交通手段: {transport}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-shrink-0 items-center gap-2">
+                            {mapUrl && (
+                              <a
+                                href={mapUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
                               >
-                                編集
-                              </button>
-                              <button
-                                onClick={() => onDelete(item.id)}
-                                className="text-xs font-semibold text-red-500 hover:text-red-700"
-                              >
-                                削除
-                              </button>
-                            </>
-                          )}
+                                地図
+                              </a>
+                            )}
+                            {isCreator && (
+                              <>
+                                <button
+                                  onClick={() => onStartEdit(item)}
+                                  className="text-xs font-semibold text-gray-500 hover:text-green-700"
+                                >
+                                  編集
+                                </button>
+                                <button
+                                  onClick={() => onDelete(item.id)}
+                                  className="text-xs font-semibold text-red-500 hover:text-red-700"
+                                >
+                                  削除
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2145,26 +2198,6 @@ function recruitmentTypeLabel(value: string | null | undefined) {
   return '未設定'
 }
 
-function formatDateRange(startDate: string | null, endDate: string | null) {
-  if (!startDate && !endDate) return ''
-  if (startDate && endDate && startDate !== endDate) {
-    return `${startDate} 〜 ${endDate}`
-  }
-  return startDate || endDate || ''
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const yyyy = date.getFullYear()
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
-  const hh = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd} ${hh}:${min}`
-}
-
 function toDateTimeLocalValue(value: string | null) {
   if (!value) return ''
   const date = new Date(value)
@@ -2224,9 +2257,5 @@ function groupScheduleItemsByDay(items: ScheduleItem[]) {
 
 function formatScheduleDayLabel(value: string | null) {
   if (!value) return '日付未定'
-
-  const [year, month, day] = value.split('-').map(Number)
-  if (!year || !month || !day) return value
-
-  return `${year}年${month}月${day}日`
+  return formatJpDate(value)
 }

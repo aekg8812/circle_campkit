@@ -66,7 +66,7 @@ export default async function GroupDashboardPage({
             .from('recruitments')
             .select('plan_id, deadline, capacity, is_closed')
             .in('plan_id', planIds),
-          supabase.from('participants').select('plan_id').in('plan_id', planIds),
+          supabase.from('participants').select('plan_id, user_id').in('plan_id', planIds),
         ])
       : [{ data: [] }, { data: [] }]
 
@@ -74,6 +74,11 @@ export default async function GroupDashboardPage({
   for (const row of participantRows ?? []) {
     participantCounts[row.plan_id] = (participantCounts[row.plan_id] ?? 0) + 1
   }
+
+  // 一覧で「参加中」を出すため、自分が参加している計画を控えておく
+  const myParticipantPlanIds = (participantRows ?? [])
+    .filter((row) => row.user_id === user.id)
+    .map((row) => row.plan_id)
 
   const recruitmentByPlan = Object.fromEntries(
     (recruitments ?? []).map((r) => [
@@ -89,6 +94,7 @@ export default async function GroupDashboardPage({
       plans={plans ?? []}
       recruitmentByPlan={recruitmentByPlan}
       participantCounts={participantCounts}
+      myParticipantPlanIds={myParticipantPlanIds}
       currentUserId={user.id}
     />
   )
