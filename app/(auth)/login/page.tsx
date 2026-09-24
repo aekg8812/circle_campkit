@@ -153,7 +153,7 @@ export default function LoginPage() {
           </Link>
         </p>
       <p className="text-sm text-center mt-2">
-        <Link href="/forgot-password" className="text-gray-400 hover:text-green-600 hover:underline">
+        <Link href="/forgot-password" className="text-gray-500 hover:text-green-600 hover:underline">
           パスワードをお忘れですか？
         </Link>
       </p>

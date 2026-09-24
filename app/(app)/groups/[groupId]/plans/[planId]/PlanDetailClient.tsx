@@ -143,7 +143,7 @@ const recruitmentSchema = z.object({
 })
 
 const inputClass =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500'
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500'
 
 const timeOptions = createHalfHourTimeOptions()
 const scheduleLabels = ['集合', '出発', '到着', '解散', '休憩', '買い出し']
@@ -815,7 +815,7 @@ export default function PlanDetailClient({
             ← 戻る
           </Link>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {group.name}
             </p>
             <h1 className="text-xl font-bold text-gray-800">{plan.title}</h1>
@@ -845,7 +845,7 @@ export default function PlanDetailClient({
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <StatusBadge status={phase} className="px-3 py-1" />
           {isCreator && (
-            <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
+            <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
               起案者
             </span>
           )}
@@ -1190,11 +1190,11 @@ function StatusManager({
               募集中
             </span>
             <span className="text-amber-300">→</span>
-            <span className="rounded-full bg-white px-2 py-0.5 text-gray-400 ring-1 ring-gray-200">
+            <span className="rounded-full bg-white px-2 py-0.5 text-gray-500 ring-1 ring-gray-200">
               準備中
             </span>
             <span className="text-amber-300">→</span>
-            <span className="rounded-full bg-white px-2 py-0.5 text-gray-400 ring-1 ring-gray-200">
+            <span className="rounded-full bg-white px-2 py-0.5 text-gray-500 ring-1 ring-gray-200">
               過去
             </span>
           </div>
@@ -1352,7 +1352,7 @@ function RecruitmentSection({
         <div>
           <h3 className="mb-3 text-sm font-bold text-gray-700">参加者</h3>
           {participants.length === 0 ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-500">
               参加者はまだいません
             </p>
           ) : (
@@ -1538,7 +1538,7 @@ function PreparationSection({
             className="h-full w-full object-cover"
           />
         ) : (
-          <span className="text-xs text-gray-400">👤</span>
+          <span className="text-xs text-gray-500">👤</span>
         )}
       </div>
       <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
@@ -1549,7 +1549,7 @@ function PreparationSection({
         )}
         {prep.body}
       </span>
-      <span className="flex-shrink-0 text-xs text-gray-400">
+      <span className="flex-shrink-0 text-xs text-gray-500">
         {prep.profiles?.name ?? '名前未設定'}
       </span>
       {prep.user_id === currentUserId && (
@@ -1573,7 +1573,7 @@ function PreparationSection({
         <div>
           <p className="mb-2 text-sm font-bold text-gray-700">🎒 個人の持ち物</p>
           {personalItems.length === 0 ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">
               まだありません
             </p>
           ) : (
@@ -1634,7 +1634,7 @@ function PreparationSection({
         <div className="border-t border-gray-100 pt-5">
           <p className="mb-2 text-sm font-bold text-gray-700">🤝 共同の持ち物（みんなで使う）</p>
           {sharedItems.length === 0 ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">
               まだありません
             </p>
           ) : (
@@ -1663,7 +1663,7 @@ function PreparationSection({
         </div>
 
         {!isParticipant && (
-          <p className="text-center text-xs text-gray-400">
+          <p className="text-center text-xs text-gray-500">
             持ち物を登録できるのは、この計画に参加したメンバーだけです。
           </p>
         )}
@@ -1715,7 +1715,7 @@ function ReviewSection({
       <div className="space-y-5 p-4">
         {/* みんなの感想 */}
         {reviews.length === 0 ? (
-          <p className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-400">
+          <p className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
             まだレビューがありません。最初のひとことを書いてみましょう。
           </p>
         ) : (
@@ -1733,7 +1733,7 @@ function ReviewSection({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-sm text-gray-400">👤</span>
+                      <span className="text-sm text-gray-500">👤</span>
                     )}
                   </div>
                   <p className="flex-1 text-sm font-semibold text-gray-800">
@@ -1805,7 +1805,7 @@ function ReviewSection({
             </div>
           </form>
         ) : (
-          <p className="border-t border-gray-100 pt-4 text-xs text-gray-400">
+          <p className="border-t border-gray-100 pt-4 text-xs text-gray-500">
             レビューはこの計画に参加したメンバーが書けます。
           </p>
         )}
@@ -2185,13 +2185,13 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <div className="p-8 text-center text-sm text-gray-400">{text}</div>
+  return <div className="p-8 text-center text-sm text-gray-500">{text}</div>
 }
 
 function DetailItem({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <dt className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</dt>
+      <dt className="text-xs font-bold uppercase tracking-wider text-gray-500">{label}</dt>
       <dd className="mt-1 text-sm font-semibold text-gray-800">{value || '未設定'}</dd>
     </div>
   )

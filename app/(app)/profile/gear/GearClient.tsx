@@ -191,7 +191,7 @@ export default function GearClient({ initialGear, userId }: Props) {
                 {previewUrl ? (
                   <Image src={previewUrl} alt="プレビュー" width={200} height={112} className="object-contain h-full" />
                 ) : (
-                  <span className="text-sm text-gray-400">クリックして写真を選択</span>
+                  <span className="text-sm text-gray-500">クリックして写真を選択</span>
                 )}
               </div>
               <input ref={fileInputRef} id="gear-photo" type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
@@ -218,7 +218,7 @@ export default function GearClient({ initialGear, userId }: Props) {
       )}
 
       {gearList.length === 0 ? (
-        <p className="text-center text-gray-400 py-10 text-sm">登録された道具はありません</p>
+        <p className="text-center text-gray-500 py-10 text-sm">登録された道具はありません</p>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {gearList.map((g) => (
@@ -234,12 +234,12 @@ export default function GearClient({ initialGear, userId }: Props) {
                   />
                 </div>
               ) : (
-                <div className="w-full h-28 bg-gray-100 rounded-lg mb-2 flex items-center justify-center text-3xl text-gray-300">
+                <div className="w-full h-28 bg-gray-100 rounded-lg mb-2 flex items-center justify-center text-3xl text-gray-400">
                   🏕
                 </div>
               )}
               <p className="font-semibold text-sm text-gray-800 truncate">{g.name}</p>
-              {g.category && <p className="text-xs text-gray-400">{g.category}</p>}
+              {g.category && <p className="text-xs text-gray-500">{g.category}</p>}
               <p className="text-xs text-gray-500 mt-1">
                 {g.quantity != null ? `${g.quantity}個` : ''}
                 {g.capacity != null ? ` ／ ${g.capacity}人用` : ''}

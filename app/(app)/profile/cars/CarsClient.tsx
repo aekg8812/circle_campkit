@@ -139,7 +139,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
       )}
 
       {cars.length === 0 ? (
-        <p className="text-center text-gray-400 py-10 text-sm">登録された車はありません</p>
+        <p className="text-center text-gray-500 py-10 text-sm">登録された車はありません</p>
       ) : (
         <div className="space-y-3">
           {cars.map((car) => (

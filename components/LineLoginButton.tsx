@@ -127,7 +127,7 @@ export default function LineLoginButton() {
     <div className="mt-5">
       <div className="mb-4 flex items-center gap-3">
         <span className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs text-gray-400">または</span>
+        <span className="text-xs text-gray-500">または</span>
         <span className="h-px flex-1 bg-gray-200" />
       </div>
 
@@ -145,7 +145,7 @@ export default function LineLoginButton() {
         {loading ? 'LINEでログインしています...' : 'LINEでログイン'}
       </button>
 
-      <p className="mt-2 text-center text-xs text-gray-400">
+      <p className="mt-2 text-center text-xs text-gray-500">
         確認メールのやり取りなしでログインできます
       </p>
     </div>

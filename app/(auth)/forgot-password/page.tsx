@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
           {getValues('email')} 宛に、パスワード再設定用のリンクを送りました。
           メール内のリンクを開いて、新しいパスワードを設定してください。
         </p>
-        <p className="mt-4 text-xs text-gray-400">
+        <p className="mt-4 text-xs text-gray-500">
           メールが届かない場合は、迷惑メールフォルダもご確認ください。
         </p>
         <Link href="/login" className="mt-6 inline-block text-green-600 hover:underline text-sm">

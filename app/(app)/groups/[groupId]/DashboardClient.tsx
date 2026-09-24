@@ -361,7 +361,7 @@ export default function DashboardClient({
             <div className="mt-3 space-y-4 rounded-xl border border-gray-100 bg-gray-50/60 p-4">
               {/* 招待 */}
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
                   メンバーを招待
                 </p>
                 <div className="grid gap-2 sm:grid-cols-3">
@@ -391,7 +391,7 @@ export default function DashboardClient({
 
               {/* 自分の役職 */}
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
                   自分の役職
                 </p>
                 <select
@@ -406,14 +406,14 @@ export default function DashboardClient({
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-xs text-gray-500">
                   計画書の名簿の「役職」に反映されます。
                 </p>
               </div>
 
               {/* グループ設定 */}
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
                   グループ設定
                 </p>
                 <div className="space-y-2">
@@ -463,7 +463,7 @@ export default function DashboardClient({
 
       {/* メンバー一覧 */}
       <section>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
           メンバー（{members.length}人）
         </h2>
         <div className="max-h-96 overflow-y-auto rounded-2xl bg-white shadow-sm divide-y divide-gray-100">
@@ -481,7 +481,7 @@ export default function DashboardClient({
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <span className="text-base text-gray-400">&#128100;</span>
+                    <span className="text-base text-gray-500">&#128100;</span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -492,11 +492,11 @@ export default function DashboardClient({
                     )}
                   </p>
                   {m.profiles?.grade != null && (
-                    <p className="text-xs text-gray-400">{m.profiles.grade}年生</p>
+                    <p className="text-xs text-gray-500">{m.profiles.grade}年生</p>
                   )}
                   {proposed.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
-                      <span className="text-xs text-gray-400">起案:</span>
+                      <span className="text-xs text-gray-500">起案:</span>
                       {proposed.map((plan) => (
                         <Link
                           key={plan.id}
@@ -509,7 +509,7 @@ export default function DashboardClient({
                     </div>
                   )}
                 </div>
-                <span className="flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                <span className="flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                   {m.position}
                 </span>
               </div>
@@ -521,7 +521,7 @@ export default function DashboardClient({
       {/* 計画一覧 */}
       <section>
         <div className="mb-1 flex items-center justify-between gap-3">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500">
             計画
           </h2>
           <Link
@@ -564,7 +564,7 @@ export default function DashboardClient({
 
           {/* 並び替え */}
           <div className="flex items-center justify-end gap-2 border-b border-gray-100 px-4 py-2">
-            <label htmlFor="plan-sort" className="text-xs text-gray-400">
+            <label htmlFor="plan-sort" className="text-xs text-gray-500">
               並び替え
             </label>
             <select
@@ -634,7 +634,7 @@ export default function DashboardClient({
                             .filter(Boolean)
                             .join(' ／ ') || '日程・場所未設定'}
                         </p>
-                        <p className="mt-1 text-xs text-gray-400">
+                        <p className="mt-1 text-xs text-gray-500">
                           起案者: {plan.creator_id ? (nameByUserId.get(plan.creator_id) ?? '不明') : '不明'}
                         </p>
 
@@ -642,7 +642,7 @@ export default function DashboardClient({
                         {showRecruitmentInfo && (
                           <div className="mt-2 flex flex-wrap items-center gap-1.5">
                             {recruitment.is_closed ? (
-                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
                                 締め切り済み
                               </span>
                             ) : (
@@ -671,7 +671,7 @@ export default function DashboardClient({
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-1.5">
                         {plan.creator_id === currentUserId ? (
-                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                             起案者
                           </span>
                         ) : (
@@ -715,7 +715,7 @@ export default function DashboardClient({
               alt="グループ参加用のQRコード"
               className="mx-auto mt-4 h-56 w-56 rounded-xl border border-gray-100"
             />
-            <p className="mt-3 text-xs text-gray-400">
+            <p className="mt-3 text-xs text-gray-500">
               参加にはパスワードも必要です（別途共有してください）
             </p>
             <button
@@ -773,7 +773,7 @@ export default function DashboardClient({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-2xl text-gray-300">⛺</span>
+                      <span className="text-2xl text-gray-400">⛺</span>
                     )}
                   </div>
                   <input
@@ -789,7 +789,7 @@ export default function DashboardClient({
                   />
                 </div>
                 {editUploading && (
-                  <p className="mt-1 text-xs text-gray-400">アップロード中...</p>
+                  <p className="mt-1 text-xs text-gray-500">アップロード中...</p>
                 )}
               </div>
 
@@ -889,7 +889,7 @@ function PlanTabButton({
       className={`flex-1 py-3 text-sm font-semibold transition ${
         active
           ? 'border-b-2 border-green-600 text-green-700'
-          : 'text-gray-400 hover:text-gray-600'
+          : 'text-gray-500 hover:text-gray-600'
       }`}
     >
       {label}

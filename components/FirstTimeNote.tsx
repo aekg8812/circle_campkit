@@ -56,7 +56,7 @@ export default function FirstTimeNote({ id, label, children }: Props) {
   if (alreadyRead) {
     return (
       <details className="group">
-        <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-semibold text-gray-400 transition hover:text-green-700">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-green-700">
           <span aria-hidden>ℹ️</span>
           {label}
           <span aria-hidden className="transition group-open:rotate-90">
@@ -74,7 +74,7 @@ export default function FirstTimeNote({ id, label, children }: Props) {
       <button
         type="button"
         onClick={() => markAsRead(id)}
-        className="mt-2 rounded-lg px-2 py-1 text-xs font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+        className="mt-2 rounded-lg px-2 py-1 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-600"
       >
         わかった（次からは畳んでおく）
       </button>

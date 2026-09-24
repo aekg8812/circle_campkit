@@ -92,7 +92,7 @@ export default function NewGroupPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/groups" className="text-gray-400 hover:text-gray-600 text-sm">
+        <Link href="/groups" className="text-gray-500 hover:text-gray-600 text-sm">
           ← 戻る
         </Link>
         <h1 className="text-xl font-bold text-gray-800">グループを作成</h1>
@@ -124,7 +124,7 @@ export default function NewGroupPage() {
                   className="object-cover w-full h-full"
                 />
               ) : (
-                <span className="text-sm text-gray-400">クリックして画像を選択</span>
+                <span className="text-sm text-gray-500">クリックして画像を選択</span>
               )}
             </div>
             <input
@@ -159,7 +159,7 @@ export default function NewGroupPage() {
             <label htmlFor="group-password" className="block text-sm font-medium text-gray-700 mb-1">
               参加用パスワード *
             </label>
-            <p className="text-xs text-gray-400 mb-1">
+            <p className="text-xs text-gray-500 mb-1">
               このパスワードを知るメンバーだけがグループに参加できます
             </p>
             <input

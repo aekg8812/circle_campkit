@@ -52,10 +52,12 @@ body {
   overflow-wrap: break-word;
 }
 
+/* プレースホルダは薄すぎると屋外で読めないため、
+   本文と同じ基準（コントラスト比 4.5:1 以上）を満たす濃さにする */
 input::placeholder,
 textarea::placeholder {
-  color: #9ca3af;
-  -webkit-text-fill-color: #9ca3af;
+  color: #6b7280;
+  -webkit-text-fill-color: #6b7280;
   opacity: 1;
 }
 

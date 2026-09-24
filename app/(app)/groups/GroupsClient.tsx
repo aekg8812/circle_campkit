@@ -108,7 +108,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
 
       {/* 参加中のグループ */}
       <section>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
           参加中のグループ
         </h2>
         {myGroups.length === 0 ? (
@@ -133,7 +133,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       </section>
 
       <section>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
           グループに参加する
         </h2>
         <p className="mb-3 text-xs text-gray-500">
@@ -143,16 +143,16 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
           <input
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
             placeholder="グループ名で検索"
           />
 
           {!normalizedSearch ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-500">
               グループ名を入力して検索してください
             </p>
           ) : filteredGroups.length === 0 ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-500">
               該当するグループはありません
             </p>
           ) : (
@@ -249,7 +249,7 @@ function GroupCard({ group }: { group: Group }) {
             className="object-cover w-full h-full"
           />
         ) : (
-          <span className="text-3xl text-gray-300">&#x26FA;</span>
+          <span className="text-3xl text-gray-400">&#x26FA;</span>
         )}
       </div>
       <p className="font-semibold text-sm text-gray-800 truncate">{group.name}</p>

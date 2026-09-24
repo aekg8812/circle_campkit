@@ -134,7 +134,7 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
           {avatarUrl ? (
             <Image src={avatarUrl} alt="アバター" width={80} height={80} className="object-cover w-full h-full" />
           ) : (
-            <span className="text-3xl text-gray-400">👤</span>
+            <span className="text-3xl text-gray-500">👤</span>
           )}
         </div>
         <div>
@@ -146,7 +146,7 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
           >
             {uploading ? 'アップロード中...' : '写真を変更'}
           </button>
-          <p className="text-xs text-gray-400 mt-1">クリックして選択</p>
+          <p className="text-xs text-gray-500 mt-1">クリックして選択</p>
         </div>
         <input
           ref={fileInputRef}
@@ -176,7 +176,8 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
         </div>
 
         <Field label="学籍番号" error={errors.student_id?.message}>
-          <input {...register('student_id')} inputMode="numeric" autoComplete="off" className={inputClass} placeholder="23xxxxx" />
+          {/* 学籍番号はアルファベットを含む場合があるため、数字キーパッドに固定しない */}
+          <input {...register('student_id')} autoComplete="off" className={inputClass} placeholder="23xxxxx" />
         </Field>
 
         <Field label="学校用メールアドレス" error={errors.school_email?.message}>

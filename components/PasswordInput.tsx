@@ -29,7 +29,7 @@ const PasswordInput = forwardRef<HTMLInputElement, Props>(function PasswordInput
         aria-label={visible ? 'パスワードを隠す' : 'パスワードを表示'}
         aria-pressed={visible}
         tabIndex={-1}
-        className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 transition hover:text-gray-600"
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 transition hover:text-gray-600"
       >
         {visible ? <EyeOffIcon /> : <EyeIcon />}
       </button>

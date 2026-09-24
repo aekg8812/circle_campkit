@@ -271,7 +271,7 @@ export default async function HomePage() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold text-gray-800">自分のグループ</h2>
           {myGroups.length > 0 && (
-            <span className="text-sm text-gray-400">{myGroups.length}件</span>
+            <span className="text-sm text-gray-500">{myGroups.length}件</span>
           )}
         </div>
 
@@ -299,7 +299,7 @@ export default async function HomePage() {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-5xl text-gray-300">⛺</span>
+                      <span className="text-5xl text-gray-400">⛺</span>
                     )}
                   </div>
                   <div className="flex items-center justify-between gap-2 px-4 py-3">
@@ -307,9 +307,9 @@ export default async function HomePage() {
                       <p className="truncate text-base font-bold text-gray-800 group-hover:text-green-700">
                         {entry.group!.name}
                       </p>
-                      <p className="text-xs text-gray-400">{entry.position}</p>
+                      <p className="text-xs text-gray-500">{entry.position}</p>
                     </div>
-                    <span className="flex-shrink-0 transform-gpu text-xl text-gray-300 transition-[color,transform] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5 group-hover:text-green-500">
+                    <span className="flex-shrink-0 transform-gpu text-xl text-gray-400 transition-[color,transform] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5 group-hover:text-green-500">
                       →
                     </span>
                   </div>
@@ -432,7 +432,7 @@ function UpcomingCard({
           <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
             募集中
           </span>
-          {groupName && <span className="truncate text-xs text-gray-400">{groupName}</span>}
+          {groupName && <span className="truncate text-xs text-gray-500">{groupName}</span>}
         </div>
         <p className="truncate text-sm font-bold text-gray-800 group-hover:text-green-700">
           {item.title}
@@ -443,7 +443,7 @@ function UpcomingCard({
         {item.recruitment && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {isClosed ? (
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
                 締め切り済み
               </span>
             ) : (

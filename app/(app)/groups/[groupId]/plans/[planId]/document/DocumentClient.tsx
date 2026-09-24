@@ -86,7 +86,7 @@ type Props = {
 }
 
 const inputClass =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500'
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500'
 
 function todayIso() {
   const now = new Date()
@@ -333,7 +333,7 @@ export default function DocumentClient({
             ← 計画に戻る
           </Link>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {group.name}
             </p>
             <h1 className="text-xl font-bold text-gray-800">計画書（学校提出用）</h1>
@@ -433,7 +433,7 @@ export default function DocumentClient({
                   )
                 })}
               </select>
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-gray-500">
                 部長が複数いる場合も、ここで誰を代表者にするか選べます。
               </p>
             </Field>
@@ -592,7 +592,7 @@ export default function DocumentClient({
 
         {/* プレビュー（入力するとリアルタイムに反映） */}
         <section className="min-w-0">
-          <p className="mb-2 text-xs text-gray-400 print:hidden">
+          <p className="mb-2 text-xs text-gray-500 print:hidden">
             プレビュー（入力内容がリアルタイムで反映されます / PDFは2ページ構成で出力されます）
           </p>
           <div className="space-y-6 overflow-x-auto" id="plan-document-sheets">
@@ -663,7 +663,7 @@ export default function DocumentClient({
           </div>
         </div>
 
-        <p className="mt-3 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-gray-500">
           ※ 件名・本文は入力内容から自動で作成されます。提出先のルールに合わせて調整してください。
         </p>
       </section>
@@ -726,7 +726,7 @@ function DocumentSheet({ data }: { data: PlanDocumentData }) {
               （詳細に）
             </th>
             {data.scheduleDays.length === 0 ? (
-              <td colSpan={2} className="text-gray-400">
+              <td colSpan={2} className="text-gray-500">
                 行程が未登録です
               </td>
             ) : (
@@ -826,7 +826,7 @@ function UnderlineRow({ label, value }: { label: string; value: string }) {
 function FormBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3 rounded-xl border border-gray-100 p-3">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">{title}</h3>
+      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">{title}</h3>
       {children}
     </div>
   )
