@@ -93,7 +93,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={resendConfirmation}
                 disabled={resending}
-                className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition-ui hover:bg-amber-700 disabled:opacity-50"
               >
                 {resending ? '送信中...' : '確認メールを再送する'}
               </button>

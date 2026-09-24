@@ -145,7 +145,7 @@ export default function GearClient({ initialGear, userId }: Props) {
 
       <button
         onClick={openAdd}
-        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition"
+        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-ui"
       >
         ＋ 道具を追加
       </button>
@@ -185,7 +185,7 @@ export default function GearClient({ initialGear, userId }: Props) {
             <div>
               <label htmlFor="gear-photo" className="block text-sm font-medium text-gray-700 mb-1">写真</label>
               <div
-                className="w-full h-28 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-green-400 transition overflow-hidden"
+                className="w-full h-28 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-green-400 transition-ui overflow-hidden"
                 onClick={() => fileInputRef.current?.click()}
               >
                 {previewUrl ? (
@@ -201,14 +201,14 @@ export default function GearClient({ initialGear, userId }: Props) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50 text-sm"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
               >
                 {isSubmitting ? '保存中...' : '保存'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition text-sm"
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition-ui text-sm"
               >
                 キャンセル
               </button>
@@ -230,6 +230,7 @@ export default function GearClient({ initialGear, userId }: Props) {
                     alt={g.name}
                     width={200}
                     height={112}
+                    sizes="50vw"
                     className="object-cover w-full h-full"
                   />
                 </div>

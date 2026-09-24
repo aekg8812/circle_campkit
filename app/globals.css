@@ -216,6 +216,14 @@ button:focus-visible {
   transform: scale(0.98);
 }
 
+/* 色・影・透明度・変形だけを、統一したカーブで滑らかに変える。
+   Tailwind の素の transition は対象が広く、カーブも標準のままなので使わない。 */
+.transition-ui {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* 触れたときの手ごたえ。
    スマホでは hover がほぼ効かないため、指で感じるのは active の方。
    拡大はせず、わずかに沈ませる＋少し透かすことで押し込み感を出す。 */
@@ -247,7 +255,8 @@ button:focus-visible {
   .animate-toast-in {
     animation: none;
   }
-  .pressable {
+  .pressable,
+  .transition-ui {
     transition-duration: 0ms;
   }
   .pressable:active {

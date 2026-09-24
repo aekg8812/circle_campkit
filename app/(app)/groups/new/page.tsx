@@ -112,7 +112,7 @@ export default function NewGroupPage() {
               グループ画像（任意）
             </label>
             <div
-              className="w-full h-36 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-green-400 transition overflow-hidden bg-gray-50"
+              className="w-full h-36 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-green-400 transition-ui overflow-hidden bg-gray-50"
               onClick={() => fileInputRef.current?.click()}
             >
               {imagePreview ? (

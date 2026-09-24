@@ -826,14 +826,14 @@ export default function PlanDetailClient({
             type="button"
             onClick={duplicatePlan}
             disabled={submitting === 'duplicate'}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700 disabled:opacity-50"
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700 disabled:opacity-50"
             title="この計画をコピーして、自分の新しい計画（未公開）を作ります"
           >
             {submitting === 'duplicate' ? '複製中...' : '📋 自分の計画に複製'}
           </button>
           <Link
             href={`/groups/${group.id}/plans/${plan.id}/document`}
-            className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100"
+            className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition-ui hover:bg-green-100"
             title="学校に提出する書類（計画書＋参加者名簿）を作成します"
           >
             📄 提出書類をつくる
@@ -884,7 +884,7 @@ export default function PlanDetailClient({
           {isCreator && phase !== 'past' && (
             <Link
               href={`/groups/${group.id}/plans/${plan.id}/edit`}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700"
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700"
             >
               ✏️ 基本情報を編集
             </Link>
@@ -1018,7 +1018,7 @@ export default function PlanDetailClient({
             type="button"
             onClick={deletePlan}
             disabled={submitting === 'delete-plan'}
-            className="mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+            className="mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
           >
             {submitting === 'delete-plan' ? '削除中...' : 'この計画を削除'}
           </button>
@@ -1593,7 +1593,7 @@ function PreparationSection({
                       type="button"
                       disabled={submitting}
                       onClick={() => onAddItem(gear.name, 'gear')}
-                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
                     >
                       ＋ 🎒 {gear.name}
                     </button>
@@ -1604,7 +1604,7 @@ function PreparationSection({
                       type="button"
                       disabled={submitting}
                       onClick={() => onAddItem(carLabel(car), 'car')}
-                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
                     >
                       ＋ 🚗 {carLabel(car)}
                     </button>
@@ -1788,7 +1788,7 @@ function ReviewSection({
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white transition hover:bg-green-700 active:scale-[0.99] disabled:opacity-50"
+                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white transition-ui hover:bg-green-700 active:scale-[0.99] disabled:opacity-50"
               >
                 {submitting ? '保存中...' : hasMyReview ? '更新する' : '投稿する'}
               </button>
@@ -1797,7 +1797,7 @@ function ReviewSection({
                   type="button"
                   onClick={onDelete}
                   disabled={submitting}
-                  className="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
                 >
                   削除
                 </button>
@@ -2000,7 +2000,7 @@ function ScheduleSection({
                           <button
                             type="button"
                             onClick={onCancelEdit}
-                            className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+                            className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
                           >
                             キャンセル
                           </button>

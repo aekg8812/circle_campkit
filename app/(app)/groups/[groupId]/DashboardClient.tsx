@@ -328,6 +328,7 @@ export default function DashboardClient({
               alt={group.name}
               width={800}
               height={160}
+              sizes="(min-width: 1024px) 1024px, 100vw"
               className="object-cover w-full h-full"
             />
           ) : (
@@ -343,7 +344,7 @@ export default function DashboardClient({
               onClick={() => setMenuOpen((open) => !open)}
               aria-expanded={menuOpen}
               aria-label="グループのメニュー"
-              className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+              className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-ui ${
                 menuOpen
                   ? 'border-green-400 bg-green-50 text-green-700'
                   : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
@@ -368,21 +369,21 @@ export default function DashboardClient({
                   <button
                     type="button"
                     onClick={copyInviteUrl}
-                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
+                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition-ui hover:border-green-400 hover:bg-green-50"
                   >
                     {inviteCopied ? 'コピーしました' : '招待リンク'}
                   </button>
                   <button
                     type="button"
                     onClick={openQr}
-                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
+                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition-ui hover:border-green-400 hover:bg-green-50"
                   >
                     QRコード
                   </button>
                   <button
                     type="button"
                     onClick={shareOnLine}
-                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-green-700"
+                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition-ui hover:bg-green-700"
                   >
                     LINEで招待
                   </button>
@@ -425,7 +426,7 @@ export default function DashboardClient({
                       setEditError(null)
                       setShowEditModal(true)
                     }}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition hover:border-green-400 hover:text-green-700"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition-ui hover:border-green-400 hover:text-green-700"
                   >
                     ✏️ グループ名・画像を編集
                   </button>
@@ -437,7 +438,7 @@ export default function DashboardClient({
                         setPwError(null)
                         setShowPwModal(true)
                       }}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition hover:border-green-400 hover:text-green-700"
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition-ui hover:border-green-400 hover:text-green-700"
                     >
                       🔑 参加パスワードを変更
                     </button>
@@ -446,7 +447,7 @@ export default function DashboardClient({
                     type="button"
                     onClick={handleLeave}
                     disabled={leaving}
-                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-left text-sm font-semibold text-red-600 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-left text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
                   >
                     {leaving ? '処理中...' : '🚪 このグループを脱退'}
                   </button>
@@ -466,7 +467,7 @@ export default function DashboardClient({
         <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
           メンバー（{members.length}人）
         </h2>
-        <div className="max-h-96 overflow-y-auto rounded-2xl bg-white shadow-sm divide-y divide-gray-100">
+        <div className="reveal-stagger max-h-96 divide-y divide-gray-100 overflow-y-auto rounded-2xl bg-white shadow-sm">
           {members.map((m) => {
             const proposed = plansByCreator.get(m.user_id) ?? []
             return (
@@ -501,7 +502,7 @@ export default function DashboardClient({
                         <Link
                           key={plan.id}
                           href={`/groups/${group.id}/plans/${plan.id}`}
-                          className="inline-flex max-w-[10rem] items-center gap-1 truncate rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 transition hover:bg-green-100"
+                          className="inline-flex max-w-[10rem] items-center gap-1 truncate rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 transition-ui hover:bg-green-100"
                         >
                           {plan.title}
                         </Link>
@@ -526,7 +527,7 @@ export default function DashboardClient({
           </h2>
           <Link
             href={`/groups/${group.id}/plans/new`}
-            className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-95"
+            className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-ui hover:bg-green-700 active:scale-95"
           >
             ＋ 計画を作成
           </Link>
@@ -610,7 +611,7 @@ export default function DashboardClient({
               }
             />
           ) : (
-            <div className="max-h-[32rem] divide-y divide-gray-100 overflow-y-auto">
+            <div className="reveal-stagger max-h-[32rem] divide-y divide-gray-100 overflow-y-auto">
               {visiblePlans.map((plan) => {
                 const recruitment = recruitmentByPlan[plan.id]
                 const deadlineStatus = getDeadlineStatus(recruitment?.deadline ?? null)
@@ -622,7 +623,7 @@ export default function DashboardClient({
                   <Link
                     key={plan.id}
                     href={`/groups/${group.id}/plans/${plan.id}`}
-                    className="block px-4 py-4 transition hover:bg-gray-50"
+                    className="pressable block px-4 py-4 hover:bg-gray-50"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -721,7 +722,7 @@ export default function DashboardClient({
             <button
               type="button"
               onClick={() => setShowQr(false)}
-              className="mt-4 w-full rounded-lg bg-gray-100 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+              className="mt-4 w-full rounded-lg bg-gray-100 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
             >
               閉じる
             </button>
@@ -804,7 +805,7 @@ export default function DashboardClient({
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
                 >
                   キャンセル
                 </button>
@@ -861,7 +862,7 @@ export default function DashboardClient({
                 <button
                   type="button"
                   onClick={() => setShowPwModal(false)}
-                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
                 >
                   キャンセル
                 </button>
@@ -886,7 +887,7 @@ function PlanTabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 py-3 text-sm font-semibold transition ${
+      className={`flex-1 py-3 text-sm font-semibold transition-ui ${
         active
           ? 'border-b-2 border-green-600 text-green-700'
           : 'text-gray-500 hover:text-gray-600'

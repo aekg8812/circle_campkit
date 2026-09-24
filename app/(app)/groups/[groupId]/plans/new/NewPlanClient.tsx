@@ -287,7 +287,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
           </span>
           <span
             aria-hidden
-            className={`text-lg text-gray-500 transition ${showTemplates ? 'rotate-45' : ''}`}
+            className={`text-lg text-gray-500 transition-ui ${showTemplates ? 'rotate-45' : ''}`}
           >
             ＋
           </span>
@@ -313,7 +313,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
                     <button
                       type="button"
                       onClick={() => applyTemplate(template)}
-                      className="mt-2 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 transition hover:bg-green-100"
+                      className="mt-2 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 transition-ui hover:bg-green-100"
                     >
                       📋 この内容をコピー
                     </button>
@@ -429,7 +429,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
             <button
               type="button"
               onClick={addRow}
-              className="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+              className="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition-ui hover:bg-green-100"
             >
               ＋ 行程を追加
             </button>
@@ -442,7 +442,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
             <button
               type="button"
               onClick={addRow}
-              className="w-full rounded-lg border border-dashed border-gray-300 px-4 py-4 text-center text-sm text-gray-500 transition hover:border-green-400 hover:text-green-600"
+              className="w-full rounded-lg border border-dashed border-gray-300 px-4 py-4 text-center text-sm text-gray-500 transition-ui hover:border-green-400 hover:text-green-600"
             >
               ＋ 行程を追加する
             </button>

@@ -139,7 +139,7 @@ export default function LineLoginButton() {
         type="button"
         onClick={() => signInWithLine(true)}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#06C755] py-3 text-sm font-bold text-white transition hover:bg-[#05b34c] active:scale-[0.99] disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#06C755] py-3 text-sm font-bold text-white transition-ui hover:bg-[#05b34c] active:scale-[0.99] disabled:opacity-50"
       >
         <span aria-hidden className="text-base leading-none">💬</span>
         {loading ? 'LINEでログインしています...' : 'LINEでログイン'}

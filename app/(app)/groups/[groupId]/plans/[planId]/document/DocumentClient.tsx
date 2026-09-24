@@ -638,7 +638,7 @@ export default function DocumentClient({
               <button
                 type="button"
                 onClick={() => copyText(mailSubject, '件名')}
-                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition-ui hover:bg-green-100"
               >
                 コピー
               </button>
@@ -652,7 +652,7 @@ export default function DocumentClient({
               <button
                 type="button"
                 onClick={() => copyText(mailBody, '本文')}
-                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition-ui hover:bg-green-100"
               >
                 コピー
               </button>

@@ -97,7 +97,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       <div>
         <Link
           href="/groups/new"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.99]"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition-ui hover:bg-green-700 active:scale-[0.99]"
         >
           ＋ 新しいグループを作成
         </Link>
@@ -118,12 +118,12 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
             description="下の検索から参加するか、新しいグループを作りましょう。"
           />
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="reveal-stagger grid grid-cols-2 gap-3">
             {myGroups.map((g) => (
               <Link
                 key={g.id}
                 href={`/groups/${g.id}`}
-                className="bg-white rounded-2xl shadow-sm p-3 hover:shadow-md transition"
+                className="pressable rounded-2xl bg-white p-3 shadow-sm hover:shadow-md"
               >
                 <GroupCard group={g} />
               </Link>
@@ -156,13 +156,13 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
               該当するグループはありません
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="reveal-stagger grid grid-cols-1 gap-3 sm:grid-cols-2">
               {filteredGroups.map((g) => (
                 <div key={g.id} className="rounded-2xl border border-gray-100 bg-white p-3">
                   <GroupCard group={g} />
                   <button
                     onClick={() => openJoinModal(g)}
-                    className="mt-2 w-full rounded-lg bg-green-50 py-1.5 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+                    className="pressable mt-2 w-full rounded-lg bg-green-50 py-2 text-xs font-semibold text-green-700 hover:bg-green-100"
                   >
                     パスワードを入力して参加
                   </button>
@@ -216,14 +216,14 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50 text-sm"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
                 >
                   {isSubmitting ? '参加中...' : '参加する'}
                 </button>
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition text-sm"
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition-ui text-sm"
                 >
                   キャンセル
                 </button>
@@ -246,6 +246,7 @@ function GroupCard({ group }: { group: Group }) {
             alt={group.name}
             width={200}
             height={96}
+            sizes="(min-width: 640px) 320px, 50vw"
             className="object-cover w-full h-full"
           />
         ) : (

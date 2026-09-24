@@ -94,7 +94,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
 
       <button
         onClick={openAdd}
-        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition"
+        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-ui"
       >
         ＋ 車を追加
       </button>
@@ -122,14 +122,14 @@ export default function CarsClient({ initialCars, userId }: Props) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50 text-sm"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
               >
                 {isSubmitting ? '保存中...' : '保存'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition text-sm"
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition-ui text-sm"
               >
                 キャンセル
               </button>

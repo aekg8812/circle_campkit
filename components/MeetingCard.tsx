@@ -40,7 +40,7 @@ export default function MeetingCard({ item, myItems = [] }: Props) {
             href={mapUrl}
             target="_blank"
             rel="noreferrer"
-            className="flex-shrink-0 rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold backdrop-blur-sm transition hover:bg-white/30"
+            className="flex-shrink-0 rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold backdrop-blur-sm transition-ui hover:bg-white/30"
           >
             地図
           </a>

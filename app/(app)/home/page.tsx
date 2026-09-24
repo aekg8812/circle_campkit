@@ -296,6 +296,7 @@ export default async function HomePage() {
                         alt=""
                         width={400}
                         height={128}
+                        sizes="(min-width: 640px) 320px, 100vw"
                         className="h-full w-full object-cover"
                       />
                     ) : (

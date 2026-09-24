@@ -201,7 +201,7 @@ export default function HelpPage() {
                 {faq.q}
                 <span
                   aria-hidden
-                  className="flex-shrink-0 text-lg text-gray-500 transition group-open:rotate-45"
+                  className="flex-shrink-0 text-lg text-gray-500 transition-ui group-open:rotate-45"
                 >
                   ＋
                 </span>
