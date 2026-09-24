@@ -46,6 +46,15 @@ export function getDeadlineStatus(
   return { text: `あと${diffDays}日`, className: 'bg-gray-100 text-gray-600' }
 }
 
+/** 締切日時を過ぎているか */
+export function isDeadlinePassed(
+  deadline: string | null | undefined,
+  now: number = Date.now()
+): boolean {
+  if (!deadline) return false
+  return new Date(deadline).getTime() < now
+}
+
 /** 定員状況（「3/10人」または「3人」） */
 export function formatCapacity(participantCount: number, capacity: number | null): string {
   return capacity != null ? `${participantCount}/${capacity}人` : `${participantCount}人`

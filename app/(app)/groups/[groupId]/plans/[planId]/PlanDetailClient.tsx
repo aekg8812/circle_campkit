@@ -13,6 +13,7 @@ import { useToast } from '@/components/Toast'
 import { StatusBadge } from '@/components/StatusBadge'
 import {
   getPlanPhase,
+  isDeadlinePassed,
   isRecruitmentClosed,
   type PlanPhase,
 } from '@/lib/recruitmentStatus'
@@ -208,9 +209,7 @@ export default function PlanDetailClient({
   const capacityReached =
     recruitment?.capacity != null && participants.length >= recruitment.capacity
   // 締切は「時間締切」「先着順＆時間締切」の両方で使う
-  const deadlinePassed =
-    recruitment?.deadline != null &&
-    new Date(recruitment.deadline).getTime() < Date.now()
+  const deadlinePassed = isDeadlinePassed(recruitment?.deadline)
   // 募集が締め切られていれば「実施」、実施日を過ぎていれば「過去」に自動で移る
   const recruitmentClosed = isRecruitmentClosed(recruitment, participants.length)
   const phase: PlanPhase = getPlanPhase({
@@ -2152,11 +2151,6 @@ function formatDateRange(startDate: string | null, endDate: string | null) {
     return `${startDate} 〜 ${endDate}`
   }
   return startDate || endDate || ''
-}
-
-function formatDate(value: string | null) {
-  if (!value) return ''
-  return value.slice(0, 10)
 }
 
 function formatDateTime(value: string | null) {

@@ -82,7 +82,6 @@ type Props = {
   previousDocument: PlanDocumentRow | null
   creatorProfile: ProfileRow | null
   leaderProfile: ProfileRow | null
-  currentUserId: string
 }
 
 const inputClass =
@@ -109,7 +108,6 @@ export default function DocumentClient({
   previousDocument,
   creatorProfile,
   leaderProfile,
-  currentUserId,
 }: Props) {
   const supabase = createClient()
   const toast = useToast()
