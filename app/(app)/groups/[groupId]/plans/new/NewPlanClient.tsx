@@ -591,9 +591,10 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
+    <label className="block">
+      {/* label で囲むことで、ラベル文字をタップしても入力欄に移動できる */}
+      <span className="mb-1 block text-sm font-medium text-gray-700">{label}</span>
       {children}
-    </div>
+    </label>
   )
 }

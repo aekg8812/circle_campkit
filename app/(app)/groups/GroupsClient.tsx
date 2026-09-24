@@ -200,6 +200,8 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
               <div>
                 <PasswordInput
                   {...register('password')}
+                  id="group-join-password"
+                  autoComplete="off"
                   placeholder="パスワード"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   autoFocus

@@ -130,11 +130,13 @@ export default function ResetPasswordPage() {
           )}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="reset-password" className="block text-sm font-medium text-gray-700 mb-1">
                 新しいパスワード
               </label>
               <PasswordInput
                 {...register('password')}
+                id="reset-password"
+                autoComplete="new-password"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
               {errors.password && (
@@ -143,11 +145,13 @@ export default function ResetPasswordPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="reset-password-confirm" className="block text-sm font-medium text-gray-700 mb-1">
                 新しいパスワード（確認）
               </label>
               <PasswordInput
                 {...register('confirmPassword')}
+                id="reset-password-confirm"
+                autoComplete="new-password"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
               {errors.confirmPassword && (

@@ -12,7 +12,7 @@ export default function BottomNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200/70 bg-white/70 backdrop-blur-md sm:hidden print:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200/70 bg-white/70 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden print:hidden">
       <div className="mx-auto flex max-w-5xl">
         {items.map((item) => {
           // ホームタブはグループ関連の画面でもアクティブ表示にする

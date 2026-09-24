@@ -750,8 +750,9 @@ export default function DashboardClient({
 
             <form onSubmit={saveGroup} className="mt-4 space-y-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">グループ名</label>
+                <label htmlFor="group-edit-name" className="mb-1 block text-xs font-medium text-gray-600">グループ名</label>
                 <input
+                  id="group-edit-name"
                   value={editName}
                   onChange={(event) => setEditName(event.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -760,7 +761,7 @@ export default function DashboardClient({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">グループ画像</label>
+                <label htmlFor="group-edit-image" className="mb-1 block text-xs font-medium text-gray-600">グループ画像</label>
                 <div className="flex items-center gap-3">
                   <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
                     {editImageUrl ? (
@@ -776,6 +777,7 @@ export default function DashboardClient({
                     )}
                   </div>
                   <input
+                    id="group-edit-image"
                     type="file"
                     accept="image/*"
                     disabled={editUploading}

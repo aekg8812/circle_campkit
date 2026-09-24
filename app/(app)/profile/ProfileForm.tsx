@@ -163,7 +163,7 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Field label="氏名 *" error={errors.name?.message}>
-          <input {...register('name')} className={inputClass} placeholder="山田 太郎" />
+          <input {...register('name')} autoComplete="name" className={inputClass} placeholder="山田 太郎" />
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
@@ -176,15 +176,15 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
         </div>
 
         <Field label="学籍番号" error={errors.student_id?.message}>
-          <input {...register('student_id')} className={inputClass} placeholder="23xxxxx" />
+          <input {...register('student_id')} inputMode="numeric" autoComplete="off" className={inputClass} placeholder="23xxxxx" />
         </Field>
 
         <Field label="学校用メールアドレス" error={errors.school_email?.message}>
-          <input {...register('school_email')} type="email" className={inputClass} placeholder="xxxx@kyutech.ac.jp" />
+          <input {...register('school_email')} type="email" autoComplete="email" inputMode="email" className={inputClass} placeholder="xxxx@kyutech.ac.jp" />
         </Field>
 
         <Field label="電話番号" error={errors.phone?.message}>
-          <input {...register('phone')} className={inputClass} placeholder="090-xxxx-xxxx" />
+          <input {...register('phone')} type="tel" autoComplete="tel" inputMode="tel" className={inputClass} placeholder="090-xxxx-xxxx" />
         </Field>
 
         <Field label="指導教員氏名" error={errors.academic_advisor?.message}>
@@ -213,9 +213,12 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {/* label で囲むことで、ラベル文字をタップしても入力欄に移動できる */}
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-gray-700">{label}</span>
+        {children}
+      </label>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   )
 }

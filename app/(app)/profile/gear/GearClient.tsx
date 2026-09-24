@@ -183,7 +183,7 @@ export default function GearClient({ initialGear, userId }: Props) {
 
             {/* 写真アップロード */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">写真</label>
+              <label htmlFor="gear-photo" className="block text-sm font-medium text-gray-700 mb-1">写真</label>
               <div
                 className="w-full h-28 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-green-400 transition overflow-hidden"
                 onClick={() => fileInputRef.current?.click()}
@@ -194,7 +194,7 @@ export default function GearClient({ initialGear, userId }: Props) {
                   <span className="text-sm text-gray-400">クリックして写真を選択</span>
                 )}
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <input ref={fileInputRef} id="gear-photo" type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
             </div>
 
             <div className="flex gap-2 pt-1">
@@ -275,9 +275,12 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {/* label で囲むことで、ラベル文字をタップしても入力欄に移動できる */}
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-gray-700">{label}</span>
+        {children}
+      </label>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   )
 }

@@ -90,9 +90,11 @@ export default function SignupPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">氏名</label>
+            <label htmlFor="signup-name" className="block text-sm font-medium text-gray-700 mb-1">氏名</label>
             <input
               {...register('name')}
+              id="signup-name"
+              autoComplete="name"
               placeholder="山田 太郎"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
@@ -102,12 +104,15 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-1">
               メールアドレス
             </label>
             <input
               {...register('email')}
+              id="signup-email"
               type="email"
+              autoComplete="email"
+              inputMode="email"
               placeholder="example@kyutech.ac.jp"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
@@ -117,9 +122,11 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
+            <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
             <PasswordInput
               {...register('password')}
+              id="signup-password"
+              autoComplete="new-password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
             {errors.password && (
@@ -128,11 +135,13 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="signup-password-confirm" className="block text-sm font-medium text-gray-700 mb-1">
               パスワード（確認）
             </label>
             <PasswordInput
               {...register('confirmPassword')}
+              id="signup-password-confirm"
+              autoComplete="new-password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
             {errors.confirmPassword && (

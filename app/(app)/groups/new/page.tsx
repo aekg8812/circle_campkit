@@ -108,7 +108,7 @@ export default function NewGroupPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* グループ画像 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="group-image" className="block text-sm font-medium text-gray-700 mb-1">
               グループ画像（任意）
             </label>
             <div
@@ -129,6 +129,7 @@ export default function NewGroupPage() {
             </div>
             <input
               ref={fileInputRef}
+              id="group-image"
               type="file"
               accept="image/*"
               className="hidden"
@@ -138,11 +139,13 @@ export default function NewGroupPage() {
 
           {/* グループ名 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="group-name" className="block text-sm font-medium text-gray-700 mb-1">
               グループ名 *
             </label>
             <input
               {...register('name')}
+              id="group-name"
+              autoComplete="off"
               className={inputClass}
               placeholder="○○大学アウトドアサークル"
             />
@@ -153,7 +156,7 @@ export default function NewGroupPage() {
 
           {/* 参加用パスワード */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="group-password" className="block text-sm font-medium text-gray-700 mb-1">
               参加用パスワード *
             </label>
             <p className="text-xs text-gray-400 mb-1">
@@ -161,7 +164,9 @@ export default function NewGroupPage() {
             </p>
             <input
               {...register('password')}
+              id="group-password"
               type="password"
+              autoComplete="off"
               className={inputClass}
               placeholder="4文字以上"
             />
@@ -171,12 +176,14 @@ export default function NewGroupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="group-password-confirm" className="block text-sm font-medium text-gray-700 mb-1">
               パスワード（確認）*
             </label>
             <input
               {...register('confirmPassword')}
+              id="group-password-confirm"
               type="password"
+              autoComplete="off"
               className={inputClass}
               placeholder="もう一度入力してください"
             />

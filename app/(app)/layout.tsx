@@ -39,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </nav>
           </div>
         </header>
-        <main className="relative z-[1] mx-auto max-w-5xl px-4 py-6 pb-24 print:max-w-none print:p-0 print:pb-0 sm:pb-6">
+        <main className="relative z-[1] mx-auto max-w-5xl px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] print:max-w-none print:p-0 print:pb-0 sm:pb-6">
           {children}
         </main>
         <BottomNav />

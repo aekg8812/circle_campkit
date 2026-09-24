@@ -907,10 +907,11 @@ export default function PlanDetailClient({
 
         {isCreator && (
           <div className="mt-6">
-            <label className="mb-2 block text-sm font-bold text-gray-700">
+            <label htmlFor="plan-default-transport" className="mb-2 block text-sm font-bold text-gray-700">
               全体の交通手段
             </label>
             <select
+              id="plan-default-transport"
               value={plan.default_transport ?? ''}
               onChange={(event) => updateDefaultTransport(event.target.value)}
               disabled={updatingTransport}
@@ -1414,8 +1415,9 @@ function RecruitmentSection({
           <form onSubmit={onSave} className="space-y-3 border-t border-gray-100 pt-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">募集方式</label>
+                <label htmlFor="recruitment-type" className="mb-1 block text-xs font-medium text-gray-600">募集方式</label>
                 <select
+                  id="recruitment-type"
                   value={form.type}
                   onChange={(event) => {
                     const type = event.target.value
@@ -1434,8 +1436,9 @@ function RecruitmentSection({
               </div>
               {form.type === 'first_come' && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">定員（先着人数）</label>
+                  <label htmlFor="recruitment-capacity" className="mb-1 block text-xs font-medium text-gray-600">定員（先着人数）</label>
                   <input
+                    id="recruitment-capacity"
                     type="number"
                     min={1}
                     value={form.capacity}
@@ -1447,8 +1450,9 @@ function RecruitmentSection({
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">締切日時</label>
+              <label htmlFor="recruitment-deadline" className="mb-1 block text-xs font-medium text-gray-600">締切日時</label>
               <input
+                id="recruitment-deadline"
                 type="datetime-local"
                 onClick={openDatePicker}
                 value={form.deadline}
@@ -1767,10 +1771,11 @@ function ReviewSection({
               placeholder="活動の感想、良かった点、ヒヤリハットなど"
             />
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
+              <label htmlFor="review-cost" className="mb-1 block text-xs font-medium text-gray-600">
                 一人あたりの費用（円・任意）
               </label>
               <input
+                id="review-cost"
                 type="number"
                 min={0}
                 value={form.cost}
