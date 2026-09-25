@@ -68,6 +68,7 @@ export default async function RootPage() {
           </div>
 
           <div className="animate-fade-in-up mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-white/80 [animation-delay:320ms]">
+            <span>💬 LINEでログイン</span>
             <span>🗺️ 行程表づくり</span>
             <span>🙋 かんたん参加募集</span>
             <span>📄 計画書PDF自動作成</span>
