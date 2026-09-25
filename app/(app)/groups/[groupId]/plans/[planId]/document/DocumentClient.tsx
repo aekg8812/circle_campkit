@@ -22,6 +22,12 @@ import {
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
 import { useToast } from '@/components/Toast'
 import { useDialogDismiss } from '@/components/useDialogDismiss'
+import {
+  hasSource,
+  isCustomRow,
+  parseDocumentTemplate,
+  resolveDocumentRows,
+} from '@/lib/documentTemplate'
 import FirstTimeNote from '@/components/FirstTimeNote'
 import { toUserMessage } from '@/lib/errorMessage'
 
@@ -74,6 +80,7 @@ type PlanDocumentRow = {
   hospital_phone: string | null
   hospital_distance: string | null
   notes: string | null
+  custom_values: Record<string, string> | null
 }
 
 type Props = {
@@ -88,6 +95,8 @@ type Props = {
   previousDocument: PlanDocumentRow | null
   creatorProfile: ProfileRow | null
   leaderProfile: ProfileRow | null
+  /** グループが決めた様式。null なら標準様式 */
+  documentTemplate: unknown
 }
 
 const inputClass =
@@ -114,6 +123,7 @@ export default function DocumentClient({
   previousDocument,
   creatorProfile,
   leaderProfile,
+  documentTemplate,
 }: Props) {
   const supabase = createClient()
   const toast = useToast()
@@ -136,6 +146,20 @@ export default function DocumentClient({
 
   // A4のプレビューは小さい画面に収まらないため、全画面で見せる
   const [previewOpen, setPreviewOpen] = useState(false)
+
+  // グループが決めた様式（未設定なら標準様式）
+  const templateRows = useMemo(
+    () => parseDocumentTemplate(documentTemplate),
+    [documentTemplate]
+  )
+
+  // 自分で足した項目に入力された値
+  const [customValues, setCustomValues] = useState<Record<string, string>>(
+    () => planDocument?.custom_values ?? {}
+  )
+
+  const setCustomValue = (key: string, value: string) =>
+    setCustomValues((current) => ({ ...current, [key]: value }))
   const [generating, setGenerating] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [representativeId, setRepresentativeId] = useState<string | null>(
@@ -166,7 +190,7 @@ export default function DocumentClient({
     setForm((current) => ({ ...current, [key]: value }))
 
   // フォームの値と参加者情報から、プレビュー/PDF 共通のデータを組み立てる
-  const documentData: PlanDocumentData = useMemo(() => {
+  const documentBase: Omit<PlanDocumentData, 'rows'> = useMemo(() => {
     const positions = new Map(
       memberPositions.map((member) => [member.user_id, member.position])
     )
@@ -216,6 +240,16 @@ export default function DocumentClient({
     leaderProfile,
   ])
 
+  // 様式に沿って、表に出す行を組み立てる。
+  // プレビュー・PDF・Excel はいずれもこの rows から描く。
+  const documentData: PlanDocumentData = useMemo(
+    () => ({
+      ...documentBase,
+      rows: resolveDocumentRows(templateRows, documentBase, customValues),
+    }),
+    [documentBase, templateRows, customValues]
+  )
+
   // 提出前チェック（1）計画書そのものの未入力。
   // これまで参加者のプロフィールしか見ておらず、顧問教員や宿泊所が
   // 空欄のままでも何も言われなかった。実際にはそちらの方が提出時に困る。
@@ -261,6 +295,7 @@ export default function DocumentClient({
         hospital_phone: form.hospital_phone || null,
         hospital_distance: form.hospital_distance || null,
         notes: form.notes || null,
+        custom_values: customValues,
         representative_user_id: representativeId,
       },
       { onConflict: 'plan_id' }
@@ -274,7 +309,7 @@ export default function DocumentClient({
 
     setMessage(null)
     setSaveState('saved')
-  }, [supabase, plan.id, form, representativeId])
+  }, [supabase, plan.id, form, representativeId, customValues])
 
   // 初回描画では保存しない（読み込んだ内容をそのまま書き戻さないため）
   const skipFirstSave = useRef(true)
@@ -437,8 +472,16 @@ export default function DocumentClient({
       {/* 入力フォーム（グループのメンバーなら誰でも編集できる） */}
       {step === 'input' && (
         <section className="space-y-5 rounded-2xl bg-white p-5 shadow-sm print:hidden">
-          <div>
+          <div className="flex items-start justify-between gap-3">
             <h2 className="text-sm font-bold text-gray-700">手入力する項目</h2>
+            <Link
+              href={`/groups/${group.id}/document-template`}
+              className="pressable flex-shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-green-400 hover:text-green-700"
+            >
+              様式を編集
+            </Link>
+          </div>
+          <div>
             <p className="mt-1 text-xs text-gray-500">
               行事名・日程・参加者名簿などは計画と参加者のプロフィールから自動反映されます。
               グループのメンバーなら<strong>誰でも編集・保存できます</strong>（分担して入力できます）。
@@ -527,6 +570,7 @@ export default function DocumentClient({
             </Field>
           </FormBlock>
 
+          {hasSource(templateRows, 'lodging') && (
           <FormBlock title="宿泊所">
             <Field label="住所">
               <input
@@ -558,7 +602,9 @@ export default function DocumentClient({
               </Field>
             </div>
           </FormBlock>
+          )}
 
+          {(hasSource(templateRows, 'transport') || hasSource(templateRows, 'hospital')) && (
           <FormBlock title="移動手段・病院">
             <Field label={`移動手段（未入力なら「${plan.default_transport || '未定'}」）`}>
               <input
@@ -609,7 +655,9 @@ export default function DocumentClient({
               </Field>
             </div>
           </FormBlock>
+          )}
 
+          {hasSource(templateRows, 'notes') && (
           <FormBlock title="備考">
             <textarea
               value={form.notes}
@@ -619,6 +667,23 @@ export default function DocumentClient({
               disabled={!canEdit}
             />
           </FormBlock>
+          )}
+
+          {/* このグループが様式に足した項目 */}
+          {templateRows.filter(isCustomRow).length > 0 && (
+            <FormBlock title="このグループで追加した項目">
+              {templateRows.filter(isCustomRow).map((row) => (
+                <Field key={row.key} label={row.label}>
+                  <input
+                    value={customValues[row.key] ?? ''}
+                    onChange={(event) => setCustomValue(row.key, event.target.value)}
+                    className={inputClass}
+                    disabled={!canEdit}
+                  />
+                </Field>
+              ))}
+            </FormBlock>
+          )}
 
           {canEdit && (
             <button type="button" onClick={() => goToStep('preview')} className="btn-primary w-full">
@@ -836,65 +901,42 @@ function DocumentSheet({ data }: { data: PlanDocumentData }) {
 
       <table className="mt-3 w-full border-collapse [&_td]:border [&_td]:border-gray-800 [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:border-gray-800 [&_th]:px-2 [&_th]:py-1.5">
         <tbody>
-          <tr>
-            <th className="w-24 bg-gray-50 font-normal">行事名</th>
-            <td colSpan={2}>{data.title}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">日時</th>
-            <td colSpan={2}>{data.dateRangeLabel}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">場所</th>
-            <td colSpan={2}>{data.place}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">
-              日程
-              <br />
-              （詳細に）
-            </th>
-            {data.scheduleDays.length === 0 ? (
-              <td colSpan={2} className="text-gray-500">
-                行程が未登録です
-              </td>
-            ) : (
-              data.scheduleDays.slice(0, 2).map((day) => (
-                <td key={day.label} className="align-top" colSpan={data.scheduleDays.length === 1 ? 2 : 1}>
-                  <p className="font-semibold">{day.label}</p>
-                  {day.lines.map((line, index) => (
+          {/* 様式（グループが決めた行の並び）に沿って描く */}
+          {data.rows.map((row) => (
+            <tr key={row.key}>
+              <th className="w-24 bg-gray-50 font-normal align-top">{row.label}</th>
+              {row.kind === 'schedule' ? (
+                row.days.length === 0 ? (
+                  <td colSpan={2} className="text-gray-500">
+                    行程が未登録です
+                  </td>
+                ) : (
+                  row.days.slice(0, 2).map((day) => (
+                    <td
+                      key={day.label}
+                      className="align-top"
+                      colSpan={row.days.length === 1 ? 2 : 1}
+                    >
+                      <p className="font-semibold">{day.label}</p>
+                      {day.lines.map((line, index) => (
+                        <p key={index}>{line}</p>
+                      ))}
+                    </td>
+                  ))
+                )
+              ) : row.kind === 'lines' ? (
+                <td colSpan={2}>
+                  {row.values.map((line, index) => (
                     <p key={index}>{line}</p>
                   ))}
                 </td>
-              ))
-            )}
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">宿泊所</th>
-            <td colSpan={2}>
-              {data.lodgingLines.length === 0
-                ? ''
-                : data.lodgingLines.map((line, index) => <p key={index}>{line}</p>)}
-            </td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">移動手段</th>
-            <td colSpan={2}>{data.transportLabel}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">参加人数</th>
-            <td colSpan={2}>{data.participantCountLabel}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">周辺の病院等</th>
-            <td colSpan={2}>{data.hospitalLabel}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">備考</th>
-            <td colSpan={2} className="h-12 whitespace-pre-wrap align-top">
-              {data.notes}
-            </td>
-          </tr>
+              ) : (
+                <td colSpan={2} className="whitespace-pre-wrap">
+                  {row.value}
+                </td>
+              )}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

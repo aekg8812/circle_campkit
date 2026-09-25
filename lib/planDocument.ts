@@ -46,6 +46,8 @@ export type PlanDocumentFormValues = {
   notes: string
 }
 
+import type { ResolvedDocumentRow } from '@/lib/documentTemplate'
+
 export type PlanDocumentData = {
   createdDateLabel: string // 令和 8年 7月 6日
   recipient: string
@@ -71,6 +73,8 @@ export type PlanDocumentData = {
   hospitalLabel: string
   notes: string
   roster: RosterEntry[]
+  /** 表に出す行。グループが様式を変えていればその順・内容になる */
+  rows: ResolvedDocumentRow[]
 }
 
 export const DEFAULT_RECIPIENT = '九州工業大学情報工学研究院長　殿'

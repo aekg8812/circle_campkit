@@ -46,7 +46,7 @@ export default async function PlanDocumentPage({
       .single(),
     supabase
       .from('groups')
-      .select('id, name')
+      .select('id, name, document_template')
       .eq('id', groupId)
       .single(),
     supabase
@@ -171,6 +171,7 @@ export default async function PlanDocumentPage({
       previousDocument={previousDocument}
       creatorProfile={creatorProfile}
       leaderProfile={leaderProfile}
+      documentTemplate={group.document_template ?? null}
     />
   )
 }
