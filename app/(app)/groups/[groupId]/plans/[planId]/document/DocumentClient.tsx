@@ -21,6 +21,7 @@ import {
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
 import { useToast } from '@/components/Toast'
 import FirstTimeNote from '@/components/FirstTimeNote'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Group = { id: string; name: string }
 
@@ -230,7 +231,7 @@ export default function DocumentClient({
     )
 
     if (error) {
-      setMessage({ type: 'error', text: '保存に失敗しました: ' + error.message })
+      setMessage({ type: 'error', text: toUserMessage(error, '保存できませんでした。') })
       toast('保存に失敗しました', 'error')
       setSaving(false)
       return

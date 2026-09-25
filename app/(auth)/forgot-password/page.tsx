@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useState } from 'react'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z.object({
   email: z.string().email('有効なメールアドレスを入力してください'),
@@ -34,7 +35,7 @@ export default function ForgotPasswordPage() {
       redirectTo: `${location.origin}/reset-password`,
     })
     if (error) {
-      setServerError(error.message)
+      setServerError(toUserMessage(error, 'メールを送信できませんでした。'))
       return
     }
     setSent(true)

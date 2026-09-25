@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z.object({
   name: z.string().optional().nullable(),
@@ -66,7 +67,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
         .eq('id', editing)
         .select()
         .single()
-      if (error) { setServerError(error.message); return }
+      if (error) { setServerError(toUserMessage(error, '車の情報を保存できませんでした。')); return }
       setCars((prev) => prev.map((c) => (c.id === editing ? updated : c)))
     } else {
       const { data: created, error } = await supabase
@@ -74,7 +75,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
         .insert({ ...data, owner_id: userId })
         .select()
         .single()
-      if (error) { setServerError(error.message); return }
+      if (error) { setServerError(toUserMessage(error, '車の情報を保存できませんでした。')); return }
       setCars((prev) => [created, ...prev])
     }
     setShowForm(false)
@@ -92,7 +93,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
       return
     }
     const { error } = await supabase.from('cars').delete().eq('id', id)
-    if (error) { setServerError(error.message); return }
+    if (error) { setServerError(toUserMessage(error, '車の情報を保存できませんでした。')); return }
     setCars((prev) => prev.filter((c) => c.id !== id))
   }
 

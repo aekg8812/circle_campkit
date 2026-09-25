@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Group = {
   id: string
@@ -93,7 +94,7 @@ export default function EditPlanClient({ group, plan }: Props) {
       .eq('id', plan.id)
 
     if (error) {
-      setServerError('計画の更新に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '計画の更新できませんでした。'))
       return
     }
 

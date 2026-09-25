@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useState, useRef } from 'react'
 import { useConfirm } from '@/components/ConfirmDialog'
 import Image from 'next/image'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const CATEGORIES = ['テント', '寝袋', '調理', 'テーブル・チェア', '照明', 'その他']
 
@@ -89,7 +90,7 @@ export default function GearClient({ initialGear, userId }: Props) {
       .from('gear')
       .upload(path, pendingPhoto, { upsert: true })
     if (error) {
-      setServerError('写真のアップロードに失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '写真のアップロードできませんでした。'))
       return null
     }
     const { data } = supabase.storage.from('gear').getPublicUrl(path)
@@ -109,7 +110,7 @@ export default function GearClient({ initialGear, userId }: Props) {
         .eq('id', editing)
         .select()
         .single()
-      if (error) { setServerError(error.message); return }
+      if (error) { setServerError(toUserMessage(error, '道具の情報を保存できませんでした。')); return }
       setGearList((prev) => prev.map((g) => (g.id === editing ? updated : g)))
     } else {
       const { data: created, error } = await supabase
@@ -117,7 +118,7 @@ export default function GearClient({ initialGear, userId }: Props) {
         .insert({ ...data, owner_id: userId })
         .select()
         .single()
-      if (error) { setServerError(error.message); return }
+      if (error) { setServerError(toUserMessage(error, '道具の情報を保存できませんでした。')); return }
       if (pendingPhoto) {
         const photoUrl = await uploadPhoto(created.id)
         if (!photoUrl) return
@@ -143,7 +144,7 @@ export default function GearClient({ initialGear, userId }: Props) {
       return
     }
     const { error } = await supabase.from('gear').delete().eq('id', id)
-    if (error) { setServerError(error.message); return }
+    if (error) { setServerError(toUserMessage(error, '道具の情報を保存できませんでした。')); return }
     setGearList((prev) => prev.filter((g) => g.id !== id))
   }
 

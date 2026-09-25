@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
 import LineLoginButton from '@/components/LineLoginButton'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z.object({
   name: z.string().min(1, '名前を入力してください'),
@@ -46,7 +47,7 @@ export default function SignupPage() {
       },
     })
     if (error) {
-      setServerError(error.message)
+      setServerError(toUserMessage(error, 'アカウントを作成できませんでした。'))
       return
     }
     // メール確認が無効な設定なら、この時点でログイン済み → そのまま進める

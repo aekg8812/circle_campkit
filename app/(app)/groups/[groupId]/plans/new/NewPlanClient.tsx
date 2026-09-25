@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
 import { PLAN_TEMPLATES, type PlanTemplate } from '@/lib/planTemplates'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Group = {
   id: string
@@ -68,6 +69,14 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
   // AIによる行程表の下書き
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  // 送信エラーは、押したボタンのすぐ上に出す。
+  // フォームが長いため、画面上部に出すと押した人には見えないまま終わる。
+  const errorRef = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    if (!serverError) return
+    errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [serverError])
 
   // 基本情報
   const [basic, setBasic] = useState({
@@ -283,7 +292,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
       .single()
 
     if (error || !created) {
-      setServerError('計画の作成に失敗しました: ' + (error?.message ?? ''))
+      setServerError(toUserMessage(error, '計画の作成できませんでした。'))
       setSubmitting(false)
       return
     }
@@ -308,7 +317,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
         }))
       )
       if (scheduleError) {
-        setServerError('計画は作成されましたが、行程の保存に失敗しました: ' + scheduleError.message)
+        setServerError(toUserMessage(scheduleError, '計画は作成されましたが、行程の保存できませんでした。'))
         setSubmitting(false)
         router.push(`/groups/${group.id}/plans/${created.id}`)
         return
@@ -325,7 +334,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
         is_closed: false,
       })
       if (recError) {
-        setServerError('計画は作成されましたが、募集設定の保存に失敗しました: ' + recError.message)
+        setServerError(toUserMessage(recError, '計画は作成されましたが、募集設定の保存できませんでした。'))
         setSubmitting(false)
         router.push(`/groups/${group.id}/plans/${created.id}`)
         return
@@ -349,10 +358,6 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
           <h1 className="text-xl font-bold text-gray-800">計画を作成</h1>
         </div>
       </div>
-
-      {serverError && (
-        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{serverError}</p>
-      )}
 
       {/* テンプレートから作成（ボタンを押すと一覧が開く） */}
       <section className="mb-5 rounded-2xl bg-white p-4 shadow-sm">
@@ -672,6 +677,16 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
           作成するとそのまま保存され、「自分の計画」に入ります（この時点ではまだグループに公開されません）。
           グループへの公開は、計画の詳細画面の「📣 募集を開始する」から行えます。
         </p>
+
+        {serverError && (
+          <p
+            ref={errorRef}
+            role="alert"
+            className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600"
+          >
+            {serverError}
+          </p>
+        )}
 
         <button type="submit" disabled={submitting} className="btn-primary w-full py-3">
           {submitting ? '作成中...' : '計画を作成'}

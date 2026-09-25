@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useLiff } from '@/components/LiffProvider'
+import { toUserMessage } from '@/lib/errorMessage'
 
 // LINEの認証へ送り出したことを覚えておくための印（タブを閉じれば消える）
 const PENDING_KEY = 'campkit.line-login-pending'
@@ -88,7 +89,7 @@ export default function LineLoginButton() {
         })
 
         if (verifyError) {
-          setError('ログイン処理に失敗しました: ' + verifyError.message)
+          setError(toUserMessage(verifyError, 'ログイン処理できませんでした。'))
           setLoading(false)
           return
         }

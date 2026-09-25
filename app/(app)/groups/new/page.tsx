@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z
   .object({
@@ -68,7 +69,7 @@ export default function NewGroupPage() {
         .from('group-images')
         .upload(path, imageFile)
       if (uploadError) {
-        setServerError('画像のアップロードに失敗しました: ' + uploadError.message)
+        setServerError(toUserMessage(uploadError, '画像のアップロードできませんでした。'))
         return
       }
       const { data: urlData } = supabase.storage
@@ -83,7 +84,7 @@ export default function NewGroupPage() {
       p_password: data.password,
     })
     if (error) {
-      setServerError('グループの作成に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, 'グループの作成できませんでした。'))
       return
     }
     router.push(`/groups/${groupId}`)

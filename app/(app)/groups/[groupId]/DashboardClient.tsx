@@ -23,6 +23,7 @@ import {
   isRecruitmentClosed,
   type RecruitmentInfo,
 } from '@/lib/recruitmentStatus'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Profile = {
   name: string
@@ -69,6 +70,9 @@ type Props = {
 type PlanTab = 'recruiting' | 'in_progress' | 'past' | 'mine'
 
 type SortKey = 'deadline_asc' | 'created_desc' | 'start_asc' | 'created_asc'
+
+// 一覧で最初に見せる件数（これを超える分は「すべて表示」で開く）
+const VISIBLE_COUNT = 5
 
 const sortOptions: { value: SortKey; label: string }[] = [
   { value: 'deadline_asc', label: '締切が近い順' },
@@ -165,6 +169,11 @@ export default function DashboardClient({
   const [pwError, setPwError] = useState<string | null>(null)
   // グループの名前・画像の編集（メンバーなら誰でも）
   const [showEditModal, setShowEditModal] = useState(false)
+  // 一覧は最初の数件だけ出す。
+  // ページの中にスクロール領域を作ると、スマホで「どちらが動くか」が
+  // 指の位置で変わってしまい、操作しづらくなるため。
+  const [showAllMembers, setShowAllMembers] = useState(false)
+  const [showAllPlans, setShowAllPlans] = useState(false)
 
   // どのモーダルも Escape で閉じられるようにする
   const closeQr = useCallback(() => setShowQr(false), [])
@@ -188,7 +197,7 @@ export default function DashboardClient({
       upsert: true,
     })
     if (error) {
-      setEditError('画像のアップロードに失敗しました: ' + error.message)
+      setEditError(toUserMessage(error, '画像のアップロードできませんでした。'))
       setEditUploading(false)
       return
     }
@@ -212,7 +221,7 @@ export default function DashboardClient({
 
     setEditSaving(false)
     if (error) {
-      setEditError('保存に失敗しました: ' + error.message)
+      setEditError(toUserMessage(error, '保存できませんでした。'))
       return
     }
     setShowEditModal(false)
@@ -278,7 +287,7 @@ export default function DashboardClient({
       p_new_password: pwForm.password,
     })
     if (error) {
-      setPwError(error.message)
+      setPwError(toUserMessage(error, 'パスワードを変更できませんでした。'))
       setPwSaving(false)
       return
     }
@@ -329,7 +338,7 @@ export default function DashboardClient({
       p_group_id: group.id,
     })
     if (error) {
-      setLeaveError(error.message)
+      setLeaveError(toUserMessage(error, '脱退できませんでした。'))
       setLeaving(false)
       return
     }
@@ -487,8 +496,8 @@ export default function DashboardClient({
         <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
           メンバー（{members.length}人）
         </h2>
-        <div className="reveal-stagger max-h-96 divide-y divide-gray-100 overflow-y-auto rounded-2xl bg-white shadow-sm">
-          {members.map((m) => {
+        <div className="reveal-stagger divide-y divide-gray-100 rounded-2xl bg-white shadow-sm">
+          {(showAllMembers ? members : members.slice(0, VISIBLE_COUNT)).map((m) => {
             const proposed = plansByCreator.get(m.user_id) ?? []
             return (
               <div key={m.id} className="flex items-start gap-3 px-4 py-3">
@@ -537,6 +546,15 @@ export default function DashboardClient({
             )
           })}
         </div>
+        {members.length > VISIBLE_COUNT && !showAllMembers && (
+          <button
+            type="button"
+            onClick={() => setShowAllMembers(true)}
+            className="pressable mt-2 w-full rounded-xl border border-gray-200 bg-white py-2.5 text-xs font-semibold text-gray-600 hover:border-green-400 hover:text-green-700"
+          >
+            すべて表示（{members.length}人）
+          </button>
+        )}
       </section>
 
       {/* 計画一覧 */}
@@ -631,8 +649,8 @@ export default function DashboardClient({
               }
             />
           ) : (
-            <div className="reveal-stagger max-h-[32rem] divide-y divide-gray-100 overflow-y-auto">
-              {visiblePlans.map((plan) => {
+            <div className="reveal-stagger divide-y divide-gray-100">
+              {(showAllPlans ? visiblePlans : visiblePlans.slice(0, VISIBLE_COUNT)).map((plan) => {
                 const recruitment = recruitmentByPlan[plan.id]
                 const deadlineStatus = getDeadlineStatus(recruitment?.deadline ?? null)
                 const phase = phaseOf(plan)
@@ -708,6 +726,15 @@ export default function DashboardClient({
                   </Link>
                 )
               })}
+              {visiblePlans.length > VISIBLE_COUNT && !showAllPlans && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllPlans(true)}
+                  className="pressable w-full py-3 text-xs font-semibold text-gray-600 hover:text-green-700"
+                >
+                  すべて表示（{visiblePlans.length}件）
+                </button>
+              )}
             </div>
           )}
         </div>

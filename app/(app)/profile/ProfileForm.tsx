@@ -8,6 +8,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useToast } from '@/components/Toast'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z.object({
   name: z.string().min(1, '名前を入力してください'),
@@ -111,7 +112,7 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
       })
       .eq('id', userId)
     if (error) {
-      setServerError('保存に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '保存できませんでした。'))
       toast('保存に失敗しました', 'error')
       return
     }

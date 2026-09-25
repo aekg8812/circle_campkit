@@ -23,6 +23,7 @@ import {
   isRecruitmentClosed,
   type PlanPhase,
 } from '@/lib/recruitmentStatus'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Group = {
   id: string
@@ -255,7 +256,7 @@ export default function PlanDetailClient({
       .eq('id', plan.id)
 
     if (error) {
-      setServerError('状態の更新に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '状態の更新できませんでした。'))
       setUpdatingStatus(null)
       return
     }
@@ -277,7 +278,7 @@ export default function PlanDetailClient({
       .eq('id', plan.id)
 
     if (error) {
-      setServerError('交通手段の更新に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '交通手段の更新できませんでした。'))
       setUpdatingTransport(false)
       return
     }
@@ -323,7 +324,7 @@ export default function PlanDetailClient({
     })
 
     if (error) {
-      setServerError('行程の追加に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '行程の追加できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -384,7 +385,7 @@ export default function PlanDetailClient({
       .eq('id', editingScheduleId)
 
     if (error) {
-      setServerError('行程の更新に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '行程の更新できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -456,7 +457,7 @@ export default function PlanDetailClient({
       )
 
     if (error) {
-      setServerError('募集設定の保存に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '募集設定の保存できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -489,7 +490,7 @@ export default function PlanDetailClient({
     })
 
     if (error) {
-      setServerError('参加登録に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '参加登録できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -525,7 +526,7 @@ export default function PlanDetailClient({
       .eq('id', myParticipant.id)
 
     if (error) {
-      setServerError('参加キャンセルに失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '参加キャンセルできませんでした。'))
       setSubmitting(null)
       return
     }
@@ -564,7 +565,7 @@ export default function PlanDetailClient({
     )
 
     if (error) {
-      setServerError('レビューの保存に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, 'レビューの保存できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -592,7 +593,7 @@ export default function PlanDetailClient({
     const { error } = await supabase.from('plan_reviews').delete().eq('id', myReview.id)
 
     if (error) {
-      setServerError('レビューの削除に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, 'レビューの削除できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -630,7 +631,7 @@ export default function PlanDetailClient({
     )
 
     if (error) {
-      setServerError('募集の締め切りに失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '募集の締め切りできませんでした。'))
       setSubmitting(null)
       return
     }
@@ -672,7 +673,7 @@ export default function PlanDetailClient({
       .single()
 
     if (error || !created) {
-      setServerError('複製に失敗しました: ' + (error?.message ?? ''))
+      setServerError(toUserMessage(error, '複製できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -722,7 +723,7 @@ export default function PlanDetailClient({
     })
 
     if (error) {
-      setServerError('持ち物の追加に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '持ち物の追加できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -774,7 +775,7 @@ export default function PlanDetailClient({
       if (rows.length > 0) {
         const { error } = await supabase.from('preparations').insert(rows)
         if (error) {
-          setServerError('持ち物の登録に失敗しました: ' + error.message)
+          setServerError(toUserMessage(error, '持ち物の登録できませんでした。'))
           setPrepSaving(false)
           return
         }
@@ -791,7 +792,7 @@ export default function PlanDetailClient({
     setServerError(null)
     const { error } = await supabase.from('preparations').delete().eq('id', id)
     if (error) {
-      setServerError('削除に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '削除できませんでした。'))
       return
     }
     refreshAfterMutation()
@@ -816,7 +817,7 @@ export default function PlanDetailClient({
     const { error } = await supabase.from('plans').delete().eq('id', plan.id)
 
     if (error) {
-      setServerError('計画の削除に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '計画の削除できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -842,7 +843,7 @@ export default function PlanDetailClient({
 
     const { error } = await supabase.from(table).delete().eq('id', id)
     if (error) {
-      setServerError('削除に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '削除できませんでした。'))
       return
     }
     refreshAfterMutation()
@@ -1014,6 +1015,7 @@ export default function PlanDetailClient({
       <RecruitmentSection
         recruitment={recruitment}
         participants={participants}
+        currentUserId={currentUserId}
         isCreator={isCreator}
         isParticipating={Boolean(myParticipant)}
         isCreatorParticipant={Boolean(myParticipant && isCreator)}
@@ -1324,6 +1326,7 @@ function StatusManager({
 function RecruitmentSection({
   recruitment,
   participants,
+  currentUserId,
   isCreator,
   isParticipating,
   isCreatorParticipant,
@@ -1340,6 +1343,7 @@ function RecruitmentSection({
 }: {
   recruitment: Recruitment | null
   participants: Participant[]
+  currentUserId: string
   isCreator: boolean
   isParticipating: boolean
   isCreatorParticipant: boolean
@@ -1404,13 +1408,16 @@ function RecruitmentSection({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-800">
                       {participant.profiles?.name ?? '名前未設定'}
+                      {participant.user_id === currentUserId && (
+                        <span className="ml-1 text-xs font-normal text-green-700">（あなた）</span>
+                      )}
                     </p>
+                    {/* 参加日時は誰も見ないうえ、人数ぶん並ぶと数字で画面が埋まるので出さない */}
                     <p className="text-xs text-gray-500">
                       {participant.position}
                       {participant.profiles?.grade != null
                         ? ` / ${participant.profiles.grade}年生`
                         : ''}
-                      {participant.joined_at ? ` / ${formatJpDateTime(participant.joined_at)}` : ''}
                     </p>
                   </div>
                 </div>
@@ -2311,10 +2318,17 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function DetailItem({ label, value }: { label: string; value: string | null | undefined }) {
+  const filled = value != null && value !== ''
   return (
     <div>
       <dt className="text-xs font-bold uppercase tracking-wider text-gray-500">{label}</dt>
-      <dd className="mt-1 text-sm font-semibold text-gray-800">{value || '未設定'}</dd>
+      {/* 「未設定」が並ぶと壊れて見えるので、空欄は静かなダッシュにする。
+         起案者には見出しの横に編集ボタンがあるので、ここに導線は置かない。 */}
+      <dd
+        className={`mt-1 text-sm font-semibold ${filled ? 'text-gray-800' : 'text-gray-400'}`}
+      >
+        {filled ? value : '—'}
+      </dd>
     </div>
   )
 }

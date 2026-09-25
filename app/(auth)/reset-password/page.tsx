@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
 import type { EmailOtpType } from '@supabase/supabase-js'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z
   .object({
@@ -88,7 +89,7 @@ export default function ResetPasswordPage() {
     const supabase = createClient()
     const { error } = await supabase.auth.updateUser({ password: data.password })
     if (error) {
-      setServerError(error.message)
+      setServerError(toUserMessage(error, 'パスワードを更新できませんでした。'))
       return
     }
     setDone(true)
