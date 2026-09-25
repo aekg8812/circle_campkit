@@ -170,24 +170,26 @@ export default function DashboardClient({
   // グループの名前・画像の編集（メンバーなら誰でも）
   const [showEditModal, setShowEditModal] = useState(false)
 
-  // グループの削除。影響が大きいので、名前を入力してもらってから実行する
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deleteInput, setDeleteInput] = useState('')
+  // グループの削除。消える範囲が大きいので、確認の文面で何が消えるかを明示する
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const closeDeleteModal = useCallback(() => setShowDeleteModal(false), [])
-  useDialogDismiss(closeDeleteModal, showDeleteModal)
 
-  const deleteGroup = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setDeleteError(null)
-
-    if (deleteInput.trim() !== group.name) {
-      setDeleteError('グループ名が一致しません')
+  const deleteGroup = async () => {
+    if (
+      !(await confirm({
+        title: `「${group.name}」を削除しますか？`,
+        message:
+          'このグループの計画・参加者・提出書類・テンプレートが、すべて削除されます。元に戻せません。',
+        confirmLabel: '完全に削除する',
+        tone: 'danger',
+      }))
+    ) {
       return
     }
 
+    setDeleteError(null)
     setDeleting(true)
+
     const { error } = await supabase.rpc('delete_group', { p_group_id: group.id })
 
     if (error) {
@@ -516,21 +518,20 @@ export default function DashboardClient({
                   />
                   {isGroupCreator && (
                     <SettingItem
-                      title="このグループを削除"
+                      title={deleting ? '削除中...' : 'このグループを削除'}
                       description="計画・参加者・提出書類がすべて消えます。元に戻せません"
                       tone="danger"
-                      onClick={() => {
-                        setDeleteInput('')
-                        setDeleteError(null)
-                        setShowDeleteModal(true)
-                      }}
+                      disabled={deleting}
+                      onClick={deleteGroup}
                     />
                   )}
                 </div>
               </div>
 
-              {leaveError && (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{leaveError}</p>
+              {(leaveError || deleteError) && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {leaveError ?? deleteError}
+                </p>
               )}
             </div>
           )}
@@ -903,65 +904,6 @@ export default function DashboardClient({
                   type="button"
                   onClick={() => setShowEditModal(false)}
                   className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
-                >
-                  キャンセル
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* グループ削除モーダル（作成者のみ）。
-         影響が大きいので、グループ名を入力してもらってから実行する。 */}
-      {showDeleteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
-          onClick={() => setShowDeleteModal(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="グループを削除"
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 className="text-base font-bold text-red-600">グループを削除</h2>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              「{group.name}」を削除すると、
-              <strong>このグループの計画・参加者・提出書類・テンプレートがすべて消えます。</strong>
-              元に戻せません。
-            </p>
-            <p className="mt-2 text-xs leading-5 text-gray-500">
-              本当に削除する場合は、確認のためグループ名を入力してください。
-            </p>
-
-            {deleteError && (
-              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-                {deleteError}
-              </p>
-            )}
-
-            <form onSubmit={deleteGroup} className="mt-3 space-y-3">
-              <input
-                value={deleteInput}
-                onChange={(event) => setDeleteInput(event.target.value)}
-                placeholder={group.name}
-                autoFocus
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={deleting || deleteInput.trim() !== group.name}
-                  className="pressable flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40"
-                >
-                  {deleting ? '削除中...' : '完全に削除する'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteModal(false)}
-                  className="pressable flex-1 rounded-xl bg-gray-100 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-200"
                 >
                   キャンセル
                 </button>
