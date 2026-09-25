@@ -49,7 +49,7 @@ export default async function HomePage() {
       .eq('user_id', user.id),
     supabase
       .from('participants')
-      .select('plan_id, plans(id, group_id, title, status, start_date, end_date)')
+      .select('plan_id, status, plans(id, group_id, title, status, start_date, end_date)')
       .eq('user_id', user.id),
     supabase.from('preparations').select('plan_id').eq('user_id', user.id),
     supabase
@@ -130,11 +130,13 @@ export default async function HomePage() {
 
   // ① 参加確定した計画：開始7日前〜開催中のものだけ（多すぎて見にくくならないように）
   const confirmedSoon = (myParticipations ?? [])
-    .map((participation) =>
-      Array.isArray(participation.plans)
+    .map((participation) => {
+      const plan = Array.isArray(participation.plans)
         ? (participation.plans[0] ?? null)
         : participation.plans
-    )
+      // 「未定」で登録している場合は、確定と区別して見せる
+      return plan ? { ...plan, myStatus: participation.status ?? 'going' } : null
+    })
     .filter(
       (plan): plan is NonNullable<typeof plan> =>
         plan != null &&
@@ -159,12 +161,14 @@ export default async function HomePage() {
             .from('recruitments')
             .select('plan_id, deadline, capacity, is_closed')
             .in('plan_id', openPlanIds),
-          supabase.from('participants').select('plan_id').in('plan_id', openPlanIds),
+          supabase.from('participants').select('plan_id, status').in('plan_id', openPlanIds),
         ])
       : [{ data: [] }, { data: [] }]
 
+  // 定員の判定は「参加」の人だけで数える（未定は枠を埋めない）
   const openCounts: Record<string, number> = {}
   for (const row of openParticipantRows ?? []) {
+    if ((row.status ?? 'going') !== 'going') continue
     openCounts[row.plan_id] = (openCounts[row.plan_id] ?? 0) + 1
   }
 
@@ -193,6 +197,7 @@ export default async function HomePage() {
     .map((plan) => ({
       ...plan,
       kind: 'recruiting' as const,
+      myStatus: 'going',
       meetingLabel: null,
       recruitment: recruitmentByPlan[plan.id] ?? null,
       participantCount: openCounts[plan.id] ?? 0,
@@ -341,6 +346,7 @@ type UpcomingItem = {
   start_date: string | null
   end_date: string | null
   kind: 'confirmed' | 'recruiting'
+  myStatus: string
   meetingLabel: string | null
   recruitment: RecruitmentInfo | null
   participantCount: number
@@ -389,16 +395,21 @@ function UpcomingCard({
   // 参加確定は緑のヒーロー風、募集中は白カード
   if (item.kind === 'confirmed') {
     const countdown = getCountdownLabel(item.start_date, today)
+    const undecided = item.myStatus === 'maybe'
     return (
       <Link
         href={href}
-        className="pressable group relative block overflow-hidden rounded-2xl bg-gradient-to-br from-green-600 to-emerald-500 p-5 text-white shadow-sm hover:shadow-md"
+        className={`pressable group relative block overflow-hidden rounded-2xl p-5 text-white shadow-sm hover:shadow-md ${
+          undecided
+            ? 'bg-gradient-to-br from-amber-500 to-orange-500'
+            : 'bg-gradient-to-br from-green-600 to-emerald-500'
+        }`}
       >
         <HeroSilhouette />
         <div className="relative z-10">
           <div className="flex items-center justify-between">
             <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-bold backdrop-blur-sm">
-              参加確定
+              {undecided ? '未定' : '参加確定'}
             </span>
             {countdown && (
               <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold backdrop-blur-sm">
@@ -407,7 +418,7 @@ function UpcomingCard({
             )}
           </div>
           <h3 className="mt-2 text-lg font-bold leading-tight">{item.title}</h3>
-          <p className="mt-1 text-sm text-green-50">
+          <p className="mt-1 text-sm text-white/85">
             {groupName && `${groupName}・`}
             {dateLabel}
           </p>

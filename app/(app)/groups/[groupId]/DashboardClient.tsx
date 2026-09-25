@@ -63,7 +63,7 @@ type Props = {
   plans: Plan[]
   recruitmentByPlan: Record<string, RecruitmentInfo>
   participantCounts: Record<string, number>
-  myParticipantPlanIds: string[]
+  myParticipantStatus: Record<string, string>
   currentUserId: string
 }
 
@@ -122,7 +122,7 @@ export default function DashboardClient({
   plans,
   recruitmentByPlan,
   participantCounts,
-  myParticipantPlanIds,
+  myParticipantStatus,
   currentUserId,
 }: Props) {
   const router = useRouter()
@@ -232,8 +232,7 @@ export default function DashboardClient({
   // （締め切られたら「準備中」、実施日を過ぎたら「過去」に自動で移る）
   const phaseOf = (plan: Plan) => planPhaseOf(plan, recruitmentByPlan, participantCounts)
 
-  // 参加中の判定に使う
-  const myPlanIds = new Set(myParticipantPlanIds)
+  // 自分の参加状態（参加 / 未定）を一覧に出すために使う
 
   // タブ: 募集中／準備中／過去／自分の計画（自分が作成した全ての計画）
   const filteredPlans =
@@ -719,8 +718,12 @@ export default function DashboardClient({
                           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                             起案者
                           </span>
+                        ) : myParticipantStatus[plan.id] === 'maybe' ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                            未定
+                          </span>
                         ) : (
-                          myPlanIds.has(plan.id) && (
+                          myParticipantStatus[plan.id] === 'going' && (
                             <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
                               参加中
                             </span>

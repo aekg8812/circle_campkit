@@ -74,6 +74,10 @@ type Participant = {
   id: string
   user_id: string
   joined_at: string | null
+  /** going=参加 / maybe=未定 */
+  status: string | null
+  /** 集金が済んだ日時。null は未払い */
+  paid_at: string | null
   profiles: {
     name: string
     avatar_url: string | null
@@ -216,12 +220,20 @@ export default function PlanDetailClient({
     cost: myReview?.cost_per_person != null ? String(myReview.cost_per_person) : '',
   })
   const myParticipant = participants.find((participant) => participant.user_id === currentUserId)
+
+  // 「未定」は定員の枠を埋めない。確定した人だけで数える
+  const goingParticipants = participants.filter(
+    (participant) => (participant.status ?? 'going') === 'going'
+  )
+  const maybeParticipants = participants.filter(
+    (participant) => (participant.status ?? 'going') === 'maybe'
+  )
   const capacityReached =
-    recruitment?.capacity != null && participants.length >= recruitment.capacity
+    recruitment?.capacity != null && goingParticipants.length >= recruitment.capacity
   // 締切は「時間締切」「先着順＆時間締切」の両方で使う
   const deadlinePassed = isDeadlinePassed(recruitment?.deadline)
   // 募集が締め切られていれば「準備中」、実施日を過ぎていれば「過去」に自動で移る
-  const recruitmentClosed = isRecruitmentClosed(recruitment, participants.length)
+  const recruitmentClosed = isRecruitmentClosed(recruitment, goingParticipants.length)
   const phase: PlanPhase = getPlanPhase({
     status: plan.status,
     recruitmentClosed,
@@ -466,7 +478,7 @@ export default function PlanDetailClient({
     setSubmitting(null)
   }
 
-  const joinPlan = async () => {
+  const joinPlan = async (status: 'going' | 'maybe' = 'going') => {
     // プロフィール未入力があれば、名簿が空欄になる旨を伝えてから参加させる
     if (missingProfileFields.length > 0) {
       const labels = missingProfileFields.map((field) => field.label).join('・')
@@ -487,6 +499,7 @@ export default function PlanDetailClient({
     const { error } = await supabase.from('participants').insert({
       plan_id: plan.id,
       user_id: currentUserId,
+      status,
     })
 
     if (error) {
@@ -502,6 +515,43 @@ export default function PlanDetailClient({
 
     refreshAfterMutation()
     setSubmitting(null)
+  }
+
+  /** 「未定」と「参加」を切り替える */
+  const changeMyStatus = async (status: 'going' | 'maybe') => {
+    if (!myParticipant) return
+    setServerError(null)
+    setSubmitting('participant')
+
+    const { error } = await supabase
+      .from('participants')
+      .update({ status })
+      .eq('id', myParticipant.id)
+
+    if (error) {
+      setServerError(toUserMessage(error, '変更できませんでした。'))
+      setSubmitting(null)
+      return
+    }
+
+    toast(status === 'going' ? '参加に変更しました' : '未定に変更しました')
+    refreshAfterMutation()
+    setSubmitting(null)
+  }
+
+  /** 集金の受け取りを記録する（起案者のみ） */
+  const togglePaid = async (participant: Participant) => {
+    setServerError(null)
+    const { error } = await supabase
+      .from('participants')
+      .update({ paid_at: participant.paid_at ? null : new Date().toISOString() })
+      .eq('id', participant.id)
+
+    if (error) {
+      setServerError(toUserMessage(error, '集金の記録を更新できませんでした。'))
+      return
+    }
+    refreshAfterMutation()
   }
 
   const leavePlan = async () => {
@@ -947,29 +997,6 @@ export default function PlanDetailClient({
           />
         </dl>
 
-        {isCreator && (
-          <div className="mt-6">
-            <label htmlFor="plan-default-transport" className="mb-2 block text-sm font-bold text-gray-700">
-              全体の交通手段
-            </label>
-            <select
-              id="plan-default-transport"
-              value={plan.default_transport ?? ''}
-              onChange={(event) => updateDefaultTransport(event.target.value)}
-              disabled={updatingTransport}
-              className={inputClass}
-            >
-              <option value="">未定</option>
-              {transportOptions
-                .filter((option) => option !== '未定')
-                .map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-            </select>
-          </div>
-        )}
 
         <div className="mt-6">
           <h2 className="mb-2 text-sm font-bold text-gray-700">説明</h2>
@@ -1022,12 +1049,14 @@ export default function PlanDetailClient({
         canJoin={canJoin}
         capacityReached={capacityReached}
         deadlinePassed={deadlinePassed}
-        form={recruitmentForm}
-        setForm={setRecruitmentForm}
         submitting={submitting}
-        onSave={saveRecruitment}
         onJoin={joinPlan}
         onLeave={leavePlan}
+        onChangeStatus={changeMyStatus}
+        onTogglePaid={togglePaid}
+        goingCount={goingParticipants.length}
+        maybeCount={maybeParticipants.length}
+        budgetPerPerson={plan.budget_per_person}
         missingProfileFields={missingProfileFields}
       />
 
@@ -1052,21 +1081,66 @@ export default function PlanDetailClient({
         />
       )}
 
+      {/* 起案者だけが使う操作をまとめる。
+         参加するだけの人にとっては全部ノイズなので、既定では畳んでおく。 */}
       {isCreator && (
-        <section className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-bold text-gray-700">計画の削除</h2>
-          <p className="mt-1 text-xs text-gray-500">
-            この計画に関する行程・募集・参加者・計画書がすべて削除されます。元に戻せません。
-          </p>
-          <button
-            type="button"
-            onClick={deletePlan}
-            disabled={submitting === 'delete-plan'}
-            className="mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
-          >
-            {submitting === 'delete-plan' ? '削除中...' : 'この計画を削除'}
-          </button>
-        </section>
+        <details className="group rounded-2xl bg-white p-4 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-bold text-gray-700">
+            <span>⚙️ この計画を管理</span>
+            <span aria-hidden className="text-gray-400 transition-ui group-open:rotate-90">
+              ›
+            </span>
+          </summary>
+
+          <div className="mt-4 space-y-5">
+            <div>
+              <label
+                htmlFor="plan-default-transport"
+                className="mb-2 block text-sm font-bold text-gray-700"
+              >
+                全体の交通手段
+              </label>
+              <select
+                id="plan-default-transport"
+                value={plan.default_transport ?? ''}
+                onChange={(event) => updateDefaultTransport(event.target.value)}
+                disabled={updatingTransport}
+                className={inputClass}
+              >
+                <option value="">未定</option>
+                {transportOptions
+                  .filter((option) => option !== '未定')
+                  .map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <RecruitmentSettingsForm
+              form={recruitmentForm}
+              setForm={setRecruitmentForm}
+              submitting={submitting}
+              onSave={saveRecruitment}
+            />
+
+            <div className="border-t border-red-100 pt-4">
+              <p className="text-sm font-bold text-gray-700">計画の削除</p>
+              <p className="mt-1 text-xs text-gray-500">
+                行程・募集・参加者・提出書類がすべて削除されます。元に戻せません。
+              </p>
+              <button
+                type="button"
+                onClick={deletePlan}
+                disabled={submitting === 'delete-plan'}
+                className="pressable mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+              >
+                {submitting === 'delete-plan' ? '削除中...' : 'この計画を削除'}
+              </button>
+            </div>
+          </div>
+        </details>
       )}
 
       {/* 参加直後: 持っていく道具・出せる車を登録してもらう（なければ「なし」） */}
@@ -1333,12 +1407,14 @@ function RecruitmentSection({
   canJoin,
   capacityReached,
   deadlinePassed,
-  form,
-  setForm,
   submitting,
-  onSave,
   onJoin,
   onLeave,
+  onChangeStatus,
+  onTogglePaid,
+  goingCount,
+  maybeCount,
+  budgetPerPerson,
   missingProfileFields,
 }: {
   recruitment: Recruitment | null
@@ -1350,23 +1426,25 @@ function RecruitmentSection({
   canJoin: boolean
   capacityReached: boolean
   deadlinePassed: boolean
-  form: { type: string; capacity: string; deadline: string; is_closed: boolean }
-  setForm: React.Dispatch<React.SetStateAction<{
-    type: string
-    capacity: string
-    deadline: string
-    is_closed: boolean
-  }>>
   submitting: string | null
-  onSave: (event: React.FormEvent<HTMLFormElement>) => void
-  onJoin: () => void
+  onJoin: (status?: 'going' | 'maybe') => void
   onLeave: () => void
+  onChangeStatus: (status: 'going' | 'maybe') => void
+  onTogglePaid: (participant: Participant) => void
+  goingCount: number
+  maybeCount: number
+  budgetPerPerson: number | null
   missingProfileFields: { label: string }[]
 }) {
+  // 未定は定員に数えないので、確定した人数を主に出す
   const participantCountText =
-    recruitment?.capacity != null
-      ? `${participants.length} / ${recruitment.capacity}人`
-      : `${participants.length}人`
+    (recruitment?.capacity != null ? `${goingCount} / ${recruitment.capacity}人` : `${goingCount}人`) +
+    (maybeCount > 0 ? `（未定 ${maybeCount}人）` : '')
+
+  const myStatus = participants.find((participant) => participant.user_id === currentUserId)?.status ?? 'going'
+  const unpaidCount = participants.filter(
+    (participant) => (participant.status ?? 'going') === 'going' && participant.paid_at == null
+  ).length
 
   return (
     <section className="rounded-2xl bg-white shadow-sm">
@@ -1390,10 +1468,20 @@ function RecruitmentSection({
                   ? '締切を過ぎています'
                   : '参加受付中'}
           </p>
-          <p className="mt-1 text-xs text-gray-500">
-            参加登録は、ログインしている本人の分だけ操作できます。
-          </p>
         </div>
+
+        {/* 集金の進み具合。予算が設定されている計画でだけ出す */}
+        {budgetPerPerson != null && isCreator && goingCount > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+            <p className="text-sm font-bold text-gray-700">
+              集金：{goingCount - unpaidCount} / {goingCount}人
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                （一人 {budgetPerPerson.toLocaleString()}円 / 残り{' '}
+                {(unpaidCount * budgetPerPerson).toLocaleString()}円）
+              </span>
+            </p>
+          </div>
+        )}
 
         <div>
           <h3 className="mb-3 text-sm font-bold text-gray-700">参加者</h3>
@@ -1406,10 +1494,17 @@ function RecruitmentSection({
               {participants.map((participant) => (
                 <div key={participant.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-800">
-                      {participant.profiles?.name ?? '名前未設定'}
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-gray-800">
+                      <span className="truncate">
+                        {participant.profiles?.name ?? '名前未設定'}
+                      </span>
                       {participant.user_id === currentUserId && (
-                        <span className="ml-1 text-xs font-normal text-green-700">（あなた）</span>
+                        <span className="text-xs font-normal text-green-700">（あなた）</span>
+                      )}
+                      {(participant.status ?? 'going') === 'maybe' && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                          未定
+                        </span>
                       )}
                     </p>
                     {/* 参加日時は誰も見ないうえ、人数ぶん並ぶと数字で画面が埋まるので出さない */}
@@ -1420,6 +1515,36 @@ function RecruitmentSection({
                         : ''}
                     </p>
                   </div>
+
+                  {/* 集金。起案者は受け取りを記録でき、他の人は自分の状態が見える */}
+                  {budgetPerPerson != null && (participant.status ?? 'going') === 'going' && (
+                    isCreator ? (
+                      <button
+                        type="button"
+                        onClick={() => onTogglePaid(participant)}
+                        className={`pressable flex-shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                          participant.paid_at
+                            ? 'bg-green-100 text-green-700'
+                            : 'border border-gray-300 text-gray-500'
+                        }`}
+                        title={participant.paid_at ? '取り消す' : '受け取ったことを記録する'}
+                      >
+                        {participant.paid_at ? '✓ 受取済み' : '未払い'}
+                      </button>
+                    ) : (
+                      participant.user_id === currentUserId && (
+                        <span
+                          className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                            participant.paid_at
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {participant.paid_at ? '✓ 支払い済み' : '未払い'}
+                        </span>
+                      )
+                    )
+                  )}
                 </div>
               ))}
             </div>
@@ -1439,13 +1564,48 @@ function RecruitmentSection({
 
         <div className="flex flex-wrap gap-2">
           {!isParticipating && (
+            <>
+              <button
+                type="button"
+                onClick={() => onJoin('going')}
+                disabled={submitting === 'participant' || (!canJoin && !isCreator)}
+                className="btn-primary flex-1 py-3 sm:flex-none sm:px-8"
+              >
+                {isCreator ? '起案者を参加登録' : '参加する'}
+              </button>
+              {!isCreator && (
+                <button
+                  type="button"
+                  onClick={() => onJoin('maybe')}
+                  disabled={submitting === 'participant' || !canJoin}
+                  className="pressable rounded-xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 hover:border-amber-400 disabled:opacity-50"
+                  title="行けるか分からない場合はこちら。あとから変更できます"
+                >
+                  未定で登録
+                </button>
+              )}
+            </>
+          )}
+
+          {/* 「未定」で登録した人が、あとから確定できるようにする */}
+          {isParticipating && myStatus === 'maybe' && (
             <button
               type="button"
-              onClick={onJoin}
-              disabled={submitting === 'participant' || (!canJoin && !isCreator)}
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+              onClick={() => onChangeStatus('going')}
+              disabled={submitting === 'participant'}
+              className="btn-primary flex-1 py-3 sm:flex-none sm:px-8"
             >
-              {isCreator ? '起案者を参加登録' : '参加する'}
+              参加に変更する
+            </button>
+          )}
+          {isParticipating && myStatus === 'going' && !isCreatorParticipant && (
+            <button
+              type="button"
+              onClick={() => onChangeStatus('maybe')}
+              disabled={submitting === 'participant'}
+              className="pressable rounded-xl px-3 py-3 text-sm font-semibold text-amber-700 underline-offset-4 hover:underline disabled:opacity-50"
+            >
+              未定に変更
             </button>
           )}
           {isParticipating && !isCreatorParticipant && (
@@ -1453,14 +1613,39 @@ function RecruitmentSection({
               type="button"
               onClick={onLeave}
               disabled={submitting === 'participant'}
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:border-red-400 disabled:opacity-50"
+              className="pressable rounded-xl px-3 py-3 text-sm font-semibold text-red-500 underline-offset-4 hover:underline disabled:opacity-50"
             >
               参加をキャンセル
             </button>
           )}
         </div>
 
-        {isCreator && (
+      </div>
+    </section>
+  )
+}
+
+
+/** 募集の設定（起案者のみ）。参加者には不要なので管理セクションに置く */
+function RecruitmentSettingsForm({
+  form,
+  setForm,
+  submitting,
+  onSave,
+}: {
+  form: { type: string; capacity: string; deadline: string; is_closed: boolean }
+  setForm: React.Dispatch<
+    React.SetStateAction<{
+      type: string
+      capacity: string
+      deadline: string
+      is_closed: boolean
+    }>
+  >
+  submitting: string | null
+  onSave: (event: React.FormEvent<HTMLFormElement>) => void
+}) {
+  return (
           <form onSubmit={onSave} className="space-y-3 border-t border-gray-100 pt-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -1525,9 +1710,6 @@ function RecruitmentSection({
               {submitting === 'recruitment' ? '保存中...' : '募集設定を保存'}
             </button>
           </form>
-        )}
-      </div>
-    </section>
   )
 }
 
