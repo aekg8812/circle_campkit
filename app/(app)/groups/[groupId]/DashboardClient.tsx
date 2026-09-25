@@ -169,6 +169,36 @@ export default function DashboardClient({
   const [pwError, setPwError] = useState<string | null>(null)
   // グループの名前・画像の編集（メンバーなら誰でも）
   const [showEditModal, setShowEditModal] = useState(false)
+
+  // グループの削除。影響が大きいので、名前を入力してもらってから実行する
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteInput, setDeleteInput] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const closeDeleteModal = useCallback(() => setShowDeleteModal(false), [])
+  useDialogDismiss(closeDeleteModal, showDeleteModal)
+
+  const deleteGroup = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setDeleteError(null)
+
+    if (deleteInput.trim() !== group.name) {
+      setDeleteError('グループ名が一致しません')
+      return
+    }
+
+    setDeleting(true)
+    const { error } = await supabase.rpc('delete_group', { p_group_id: group.id })
+
+    if (error) {
+      setDeleteError(toUserMessage(error, 'グループを削除できませんでした。'))
+      setDeleting(false)
+      return
+    }
+
+    router.push('/groups')
+    router.refresh()
+  }
   // 一覧は最初の数件だけ出す。
   // ページの中にスクロール領域を作ると、スマホで「どちらが動くか」が
   // 指の位置で変わってしまい、操作しづらくなるため。
@@ -446,51 +476,56 @@ export default function DashboardClient({
                   グループ設定
                 </p>
                 <div className="space-y-2">
-                  <button
-                    type="button"
+                  <SettingItem
+                    title="グループ名・画像を編集"
+                    description="一覧やトップに出る名前と画像を変えます"
                     onClick={() => {
                       setEditName(group.name)
                       setEditImageUrl(group.image_url)
                       setEditError(null)
                       setShowEditModal(true)
                     }}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition-ui hover:border-green-400 hover:text-green-700"
-                  >
-                    ✏️ グループ名・画像を編集
-                  </button>
-                  <Link
+                  />
+                  <SettingItem
+                    title="計画テンプレート"
+                    description="よく行く場所を登録して、計画づくりで一括入力できるようにします"
                     href={`/groups/${group.id}/templates`}
-                    className="pressable rounded-lg border border-gray-200 px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:border-green-400 hover:text-green-700"
-                  >
-                    🏕️ 計画テンプレートを編集
-                  </Link>
-                  <Link
+                  />
+                  <SettingItem
+                    title="計画書の様式"
+                    description="学校に出す計画書に、どの項目をどの順で載せるかを決めます"
                     href={`/groups/${group.id}/document-template`}
-                    className="pressable rounded-lg border border-gray-200 px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:border-green-400 hover:text-green-700"
-                  >
-                    📄 計画書の様式を編集
-                  </Link>
+                  />
                   {isGroupCreator && (
-                    <button
-                      type="button"
+                    <SettingItem
+                      title="参加パスワードを変更"
+                      description="新しく参加する人に必要なパスワードを変えます"
                       onClick={() => {
                         setPwForm({ password: '', confirm: '' })
                         setPwError(null)
                         setShowPwModal(true)
                       }}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition-ui hover:border-green-400 hover:text-green-700"
-                    >
-                      🔑 参加パスワードを変更
-                    </button>
+                    />
                   )}
-                  <button
-                    type="button"
-                    onClick={handleLeave}
+                  <SettingItem
+                    title={leaving ? '処理中...' : 'このグループを脱退'}
+                    description="自分だけが抜けます。グループと計画はそのまま残ります"
+                    tone="danger"
                     disabled={leaving}
-                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-left text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    {leaving ? '処理中...' : '🚪 このグループを脱退'}
-                  </button>
+                    onClick={handleLeave}
+                  />
+                  {isGroupCreator && (
+                    <SettingItem
+                      title="このグループを削除"
+                      description="計画・参加者・提出書類がすべて消えます。元に戻せません"
+                      tone="danger"
+                      onClick={() => {
+                        setDeleteInput('')
+                        setDeleteError(null)
+                        setShowDeleteModal(true)
+                      }}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -877,6 +912,65 @@ export default function DashboardClient({
         </div>
       )}
 
+      {/* グループ削除モーダル（作成者のみ）。
+         影響が大きいので、グループ名を入力してもらってから実行する。 */}
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
+          onClick={() => setShowDeleteModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="グループを削除"
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-red-600">グループを削除</h2>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              「{group.name}」を削除すると、
+              <strong>このグループの計画・参加者・提出書類・テンプレートがすべて消えます。</strong>
+              元に戻せません。
+            </p>
+            <p className="mt-2 text-xs leading-5 text-gray-500">
+              本当に削除する場合は、確認のためグループ名を入力してください。
+            </p>
+
+            {deleteError && (
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                {deleteError}
+              </p>
+            )}
+
+            <form onSubmit={deleteGroup} className="mt-3 space-y-3">
+              <input
+                value={deleteInput}
+                onChange={(event) => setDeleteInput(event.target.value)}
+                placeholder={group.name}
+                autoFocus
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={deleting || deleteInput.trim() !== group.name}
+                  className="pressable flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40"
+                >
+                  {deleting ? '削除中...' : '完全に削除する'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="pressable flex-1 rounded-xl bg-gray-100 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-200"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* 参加パスワード変更モーダル（部長のみ） */}
       {showPwModal && (
         <div
@@ -934,6 +1028,59 @@ export default function DashboardClient({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * グループ設定の1項目。
+ * 見出しと説明を分けて、何が起きるかを押す前に分かるようにする。
+ * リンクとボタンのどちらでも同じ見た目になるよう、ここで吸収する。
+ */
+function SettingItem({
+  title,
+  description,
+  href,
+  onClick,
+  tone = 'normal',
+  disabled = false,
+}: {
+  title: string
+  description: string
+  href?: string
+  onClick?: () => void
+  tone?: 'normal' | 'danger'
+  disabled?: boolean
+}) {
+  const danger = tone === 'danger'
+  const className = `pressable block w-full rounded-lg border bg-white px-3 py-2.5 text-left ${
+    danger
+      ? 'border-red-200 hover:border-red-400 hover:bg-red-50'
+      : 'border-gray-200 hover:border-green-400'
+  } ${disabled ? 'opacity-50' : ''}`
+
+  const body = (
+    <>
+      <span
+        className={`block text-sm font-semibold ${danger ? 'text-red-600' : 'text-gray-700'}`}
+      >
+        {title}
+      </span>
+      <span className="mt-0.5 block text-xs leading-5 text-gray-500">{description}</span>
+    </>
+  )
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {body}
+      </Link>
+    )
+  }
+
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={className}>
+      {body}
+    </button>
   )
 }
 
