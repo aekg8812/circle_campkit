@@ -584,7 +584,7 @@ export default function DashboardClient({
         <div className="mb-3">
           <FirstTimeNote id="group-plans" label="計画とは">
             <p className="text-xs text-gray-500">
-              キャンプ・合宿などの「計画」を作って、募集・参加・提出書類づくりまでできます。「＋ 計画を作成」から始めましょう（テンプレートも使えます）。
+              キャンプ・合宿などの「計画」を作って、募集・参加・提出書類づくりまでできます。「＋ 計画を作成」から始めましょう。テンプレートやAIの下書きから始めると早いです。
             </p>
           </FirstTimeNote>
         </div>
