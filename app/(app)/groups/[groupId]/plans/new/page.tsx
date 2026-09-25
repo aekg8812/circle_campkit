@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import NewPlanClient from './NewPlanClient'
+import { toPlanTemplate, type PlanTemplateRow } from '@/lib/planTemplates'
 
 export const metadata = { title: '計画を作成' }
 
@@ -37,5 +38,20 @@ export default async function NewPlanPage({
     redirect('/groups')
   }
 
-  return <NewPlanClient group={group} currentUserId={user.id} />
+  // このグループが自作したテンプレート（組み込みのものと並べて出す）
+  const { data: templateRows } = await supabase
+    .from('plan_templates')
+    .select('id, emoji, name, summary, category, nights, budget, transport, description, schedule')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+
+  const groupTemplates = ((templateRows ?? []) as PlanTemplateRow[]).map(toPlanTemplate)
+
+  return (
+    <NewPlanClient
+      group={group}
+      currentUserId={user.id}
+      groupTemplates={groupTemplates}
+    />
+  )
 }

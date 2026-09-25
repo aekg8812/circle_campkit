@@ -199,3 +199,61 @@ export const PLAN_TEMPLATES: PlanTemplate[] = [
     ],
   },
 ]
+
+// ============================================================
+// グループが自作したテンプレート（plan_templates テーブル）
+// 組み込みテンプレートと同じ形に変換して、同じ扱いで使えるようにする。
+// ============================================================
+
+export type PlanTemplateRow = {
+  id: string
+  emoji: string | null
+  name: string
+  summary: string | null
+  category: string | null
+  nights: number | null
+  budget: number | null
+  transport: string | null
+  description: string | null
+  schedule: unknown
+}
+
+/** DBに入っている行程を、壊れていても落ちないように読む */
+export function parseTemplateSchedule(raw: unknown): TemplateScheduleRow[] {
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .map((row): TemplateScheduleRow | null => {
+      if (!row || typeof row !== 'object') return null
+      const candidate = row as Record<string, unknown>
+      const locationName =
+        typeof candidate.location_name === 'string' ? candidate.location_name : ''
+      if (locationName.trim() === '') return null
+
+      const dayOffset = Number(candidate.dayOffset)
+      return {
+        dayOffset: Number.isInteger(dayOffset) && dayOffset >= 0 ? dayOffset : 0,
+        time: typeof candidate.time === 'string' ? candidate.time : '',
+        time_label: typeof candidate.time_label === 'string' ? candidate.time_label : '',
+        location_name: locationName,
+        note: typeof candidate.note === 'string' ? candidate.note : '',
+      }
+    })
+    .filter((row): row is TemplateScheduleRow => row != null)
+}
+
+/** DBの1行を、組み込みテンプレートと同じ形にする */
+export function toPlanTemplate(row: PlanTemplateRow): PlanTemplate {
+  return {
+    id: row.id,
+    emoji: row.emoji || '🏕️',
+    name: row.name,
+    summary: row.summary || '',
+    category: row.category || 'キャンプ',
+    nights: row.nights ?? 1,
+    budget: row.budget ?? 0,
+    transport: row.transport || '',
+    description: row.description || '',
+    schedule: parseTemplateSchedule(row.schedule),
+  }
+}
