@@ -98,7 +98,7 @@ export default async function PlanDetailPage({
       .maybeSingle(),
     supabase
       .from('participants')
-      .select('id, user_id, joined_at, profiles(name, avatar_url, grade)')
+      .select('id, user_id, joined_at, status, paid_at, profiles(name, avatar_url, grade)')
       .eq('plan_id', planId)
       .order('joined_at', { ascending: true }),
     supabase

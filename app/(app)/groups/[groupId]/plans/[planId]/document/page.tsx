@@ -87,7 +87,7 @@ export default async function PlanDocumentPage({
       .order('sort_order', { ascending: true }),
     supabase
       .from('participants')
-      .select(`id, user_id, joined_at, profiles(${profileColumns})`)
+      .select(`id, user_id, joined_at, status, profiles(${profileColumns})`)
       .eq('plan_id', planId)
       .order('joined_at', { ascending: true }),
     supabase
@@ -127,7 +127,10 @@ export default async function PlanDocumentPage({
     }
   }
 
-  const normalizedParticipants = (participants ?? []).map((participant) => ({
+  // 「未定」の人は提出書類の名簿に載せない（確定した参加者だけを出す）
+  const normalizedParticipants = (participants ?? [])
+    .filter((participant) => (participant.status ?? 'going') === 'going')
+    .map((participant) => ({
     ...participant,
     profiles: Array.isArray(participant.profiles)
       ? (participant.profiles[0] ?? null)

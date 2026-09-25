@@ -82,12 +82,14 @@ export default async function GroupDashboardPage({
             .from('recruitments')
             .select('plan_id, deadline, capacity, is_closed')
             .in('plan_id', planIds),
-          supabase.from('participants').select('plan_id, user_id').in('plan_id', planIds),
+          supabase.from('participants').select('plan_id, user_id, status').in('plan_id', planIds),
         ])
       : [{ data: [] }, { data: [] }]
 
+  // 定員の判定は「参加」の人だけで数える（未定は枠を埋めない）
   const participantCounts: Record<string, number> = {}
   for (const row of participantRows ?? []) {
+    if ((row.status ?? 'going') !== 'going') continue
     participantCounts[row.plan_id] = (participantCounts[row.plan_id] ?? 0) + 1
   }
 
