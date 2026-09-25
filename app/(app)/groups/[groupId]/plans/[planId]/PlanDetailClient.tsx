@@ -691,6 +691,68 @@ export default function PlanDetailClient({
     setSubmitting(null)
   }
 
+  /**
+   * この計画をテンプレートとして保存する。
+   * 一度うまくいった行程を、次の年もそのまま使えるようにするのが狙い。
+   * 名前や説明はあとからテンプレート管理画面で直せるので、ここでは聞かない。
+   */
+  const saveAsTemplate = async () => {
+    setServerError(null)
+    setSubmitting('template')
+
+    // 日付は「初日から何日目か」に直して保存する（日程が変わっても使えるように）
+    const base = plan.start_date ? new Date(`${plan.start_date}T00:00:00`) : null
+    const schedule = scheduleItems.map((item) => {
+      let dayOffset = 0
+      if (base && item.day) {
+        const day = new Date(`${item.day}T00:00:00`)
+        const diff = Math.round((day.getTime() - base.getTime()) / 86400000)
+        dayOffset = diff > 0 ? diff : 0
+      }
+      return {
+        dayOffset,
+        time: item.time ? item.time.slice(0, 5) : '',
+        time_label: item.time_label ?? '',
+        location_name: item.location_name ?? '',
+        note: item.note ?? '',
+      }
+    })
+
+    const nights =
+      plan.start_date && plan.end_date && plan.start_date !== plan.end_date
+        ? Math.max(
+            0,
+            Math.round(
+              (new Date(`${plan.end_date}T00:00:00`).getTime() -
+                new Date(`${plan.start_date}T00:00:00`).getTime()) /
+                86400000
+            )
+          )
+        : 0
+
+    const { error } = await supabase.from('plan_templates').insert({
+      group_id: plan.group_id,
+      created_by: currentUserId,
+      name: plan.title,
+      summary: plan.area ? `${plan.area}・${nights === 0 ? '日帰り' : `${nights}泊`}` : '',
+      category: plan.category,
+      nights,
+      budget: plan.budget_per_person,
+      transport: plan.default_transport,
+      description: plan.description,
+      schedule,
+    })
+
+    if (error) {
+      setServerError(toUserMessage(error, 'テンプレートとして保存できませんでした。'))
+      setSubmitting(null)
+      return
+    }
+
+    toast('テンプレートに保存しました')
+    setSubmitting(null)
+  }
+
   const duplicatePlan = async () => {
     if (
       !(await confirm({
@@ -922,6 +984,15 @@ export default function PlanDetailClient({
             title="この計画をコピーして、自分の新しい計画（未公開）を作ります"
           >
             {submitting === 'duplicate' ? '複製中...' : '📋 自分の計画に複製'}
+          </button>
+          <button
+            type="button"
+            onClick={saveAsTemplate}
+            disabled={submitting === 'template'}
+            title="この行程をテンプレートとして保存し、次の計画づくりで使えるようにします"
+            className="pressable rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-green-400 hover:text-green-700 disabled:opacity-50"
+          >
+            {submitting === 'template' ? '保存中...' : '⭐ テンプレートに保存'}
           </button>
           <Link
             href={`/groups/${group.id}/plans/${plan.id}/document`}

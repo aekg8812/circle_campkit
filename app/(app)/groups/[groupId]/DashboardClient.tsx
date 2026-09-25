@@ -459,6 +459,12 @@ export default function DashboardClient({
                     ✏️ グループ名・画像を編集
                   </button>
                   <Link
+                    href={`/groups/${group.id}/templates`}
+                    className="pressable rounded-lg border border-gray-200 px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:border-green-400 hover:text-green-700"
+                  >
+                    🏕️ 計画テンプレートを編集
+                  </Link>
+                  <Link
                     href={`/groups/${group.id}/document-template`}
                     className="pressable rounded-lg border border-gray-200 px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:border-green-400 hover:text-green-700"
                   >

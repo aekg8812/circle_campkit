@@ -17,6 +17,8 @@ type Group = {
 type Props = {
   group: Group
   currentUserId: string
+  /** このグループが自作したテンプレート */
+  groupTemplates: PlanTemplate[]
 }
 
 type ScheduleRow = {
@@ -59,7 +61,7 @@ function addDays(base: Date, days: number): string {
   return `${yyyy}-${mm}-${dd}`
 }
 
-export default function NewPlanClient({ group, currentUserId }: Props) {
+export default function NewPlanClient({ group, currentUserId, groupTemplates }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const confirm = useConfirm()
@@ -384,29 +386,55 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
             <p className="text-xs text-gray-500">
               近い企画を選んで「この内容をコピー」を押すと、下のフォームに一括で入力されます（日程・場所などはあとで調整できます）。
             </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {PLAN_TEMPLATES.map((template) => (
-                <div
-                  key={template.id}
-                  className="flex items-start gap-3 rounded-xl border border-gray-100 p-3"
-                >
-                  <span aria-hidden className="text-2xl leading-none">
-                    {template.emoji}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-gray-800">{template.name}</p>
-                    <p className="mt-0.5 text-xs leading-5 text-gray-500">{template.summary}</p>
-                    <button
-                      type="button"
-                      onClick={() => applyTemplate(template)}
-                      className="mt-2 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 transition-ui hover:bg-green-100"
-                    >
-                      📋 この内容をコピー
-                    </button>
-                  </div>
+            {/* このグループが作ったテンプレートを先に出す（自分たちの定番だから） */}
+            {groupTemplates.length > 0 && (
+              <div className="mt-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold text-gray-700">このグループのテンプレート</p>
+                  <Link
+                    href={`/groups/${group.id}/templates`}
+                    className="pressable rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 hover:text-green-700"
+                  >
+                    編集
+                  </Link>
                 </div>
-              ))}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {groupTemplates.map((template) => (
+                    <TemplateCard
+                      key={template.id}
+                      template={template}
+                      onApply={() => applyTemplate(template)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-bold text-gray-700">定番テンプレート</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {PLAN_TEMPLATES.map((template) => (
+                  <TemplateCard
+                    key={template.id}
+                    template={template}
+                    onApply={() => applyTemplate(template)}
+                  />
+                ))}
+              </div>
             </div>
+
+            {groupTemplates.length === 0 && (
+              <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs leading-5 text-gray-500">
+                よく行く場所があれば、
+                <Link
+                  href={`/groups/${group.id}/templates`}
+                  className="font-bold text-green-700 underline underline-offset-2"
+                >
+                  自分たちのテンプレート
+                </Link>
+                を作っておくと、次回から書き直さずに使えます。
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -692,6 +720,38 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
           {submitting ? '作成中...' : '計画を作成'}
         </button>
       </form>
+    </div>
+  )
+}
+
+/** テンプレートの1枚。組み込みでもグループ自作でも同じ見た目にする */
+function TemplateCard({
+  template,
+  onApply,
+}: {
+  template: PlanTemplate
+  onApply: () => void
+}) {
+  const nightsLabel = template.nights === 0 ? '日帰り' : `${template.nights}泊${template.nights + 1}日`
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-gray-100 p-3">
+      <span aria-hidden className="text-2xl leading-none">
+        {template.emoji}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-gray-800">{template.name}</p>
+        <p className="mt-0.5 text-xs leading-5 text-gray-500">
+          {template.summary || `${nightsLabel}・行程${template.schedule.length}件`}
+        </p>
+        <button
+          type="button"
+          onClick={onApply}
+          className="pressable mt-2 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 hover:bg-green-100"
+        >
+          📋 この内容をコピー
+        </button>
+      </div>
     </div>
   )
 }
