@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { createClient } from '@/lib/supabase/server'
-import { AI_MODEL, countNights, createAiClient, describeSeason } from '@/lib/ai/client'
+import {
+  AI_MODEL,
+  Type,
+  countNights,
+  createAiClient,
+  describeSeason,
+  parseJsonResponse,
+} from '@/lib/ai/client'
 
 // 持ち物の抜け漏れをチェックする。
 // 計画の条件（季節・泊数・人数・活動内容）と、いま登録されている持ち物から
@@ -97,29 +103,43 @@ export async function POST(request: NextRequest) {
     .join('\n')
 
   try {
-    const client = createAiClient()
-    const response = await client.messages.parse({
+    const ai = createAiClient()
+    const response = await ai.models.generateContent({
       model: AI_MODEL,
-      max_tokens: 16000,
-      system: SYSTEM_PROMPT,
-      thinking: { type: 'adaptive' },
-      output_config: {
-        effort: 'medium',
-        format: zodOutputFormat(resultSchema),
-      },
-      messages: [
-        {
-          role: 'user',
-          content: `次の計画の持ち物を点検してください。\n\n${details}`,
+      contents: `次の計画の持ち物を点検してください。\n\n${details}`,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            summary: { type: Type.STRING },
+            findings: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  severity: { type: Type.STRING, enum: ['warning', 'info'] },
+                  title: { type: Type.STRING },
+                  detail: { type: Type.STRING },
+                },
+                required: ['severity', 'title', 'detail'],
+              },
+            },
+          },
+          required: ['summary', 'findings'],
         },
-      ],
+        maxOutputTokens: 2048,
+        temperature: 0.3,
+      },
     })
 
-    if (!response.parsed_output) {
+    const parsedResult = resultSchema.safeParse(parseJsonResponse(response.text))
+    if (!parsedResult.success) {
       return NextResponse.json({ error: '点検できませんでした' }, { status: 502 })
     }
 
-    return NextResponse.json(response.parsed_output)
+    return NextResponse.json(parsedResult.data)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'AIの呼び出しに失敗しました'
     return NextResponse.json({ error: message }, { status: 500 })

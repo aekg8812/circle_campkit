@@ -1,18 +1,32 @@
 import 'server-only'
 
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI, Type } from '@google/genai'
 
-// AI機能で使う Anthropic クライアント。
+// AI機能で使う Gemini クライアント。
 // ⚠️ APIキーはサーバー専用。NEXT_PUBLIC_ を付けず、ブラウザへ渡さないこと。
+//
+// モデルは環境変数で差し替えられるようにしている。
+// 無料枠のあるモデルは変わりうるので、コード変更なしで切り替えたいため。
+export const AI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.5-flash'
 
-export const AI_MODEL = 'claude-opus-5'
+export { Type }
 
 export function createAiClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
-    throw new Error('AI機能が未設定です（ANTHROPIC_API_KEY）')
+    throw new Error('AI機能が未設定です（GEMINI_API_KEY）')
   }
-  return new Anthropic({ apiKey })
+  return new GoogleGenAI({ apiKey })
+}
+
+/** モデルの返した JSON を安全に取り出す。壊れていれば null */
+export function parseJsonResponse(text: string | undefined): unknown {
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
 }
 
 /** 開始日から季節を言葉にする（持ち物の判断材料にする） */

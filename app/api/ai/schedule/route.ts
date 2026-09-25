@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { createClient } from '@/lib/supabase/server'
-import { AI_MODEL, countNights, createAiClient, describeSeason } from '@/lib/ai/client'
+import {
+  AI_MODEL,
+  Type,
+  countNights,
+  createAiClient,
+  describeSeason,
+  parseJsonResponse,
+} from '@/lib/ai/client'
 
 // 行程表の下書きを作る。
 // 行き先と日程から「集合 → 到着 → 解散」までの流れを提案し、
@@ -84,29 +90,46 @@ export async function POST(request: NextRequest) {
   ].join('\n')
 
   try {
-    const client = createAiClient()
-    const response = await client.messages.parse({
+    const ai = createAiClient()
+    const response = await ai.models.generateContent({
       model: AI_MODEL,
-      max_tokens: 16000,
-      system: SYSTEM_PROMPT,
-      thinking: { type: 'adaptive' },
-      output_config: {
-        effort: 'low',
-        format: zodOutputFormat(draftSchema),
-      },
-      messages: [
-        {
-          role: 'user',
-          content: `次の計画の行程表の下書きを作ってください。\n\n${details}`,
+      contents: `次の計画の行程表の下書きを作ってください。\n\n${details}`,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            rows: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  dayOffset: { type: Type.INTEGER },
+                  time: { type: Type.STRING },
+                  timeLabel: { type: Type.STRING },
+                  locationName: { type: Type.STRING },
+                  note: { type: Type.STRING },
+                },
+                required: ['dayOffset', 'time', 'timeLabel', 'locationName', 'note'],
+              },
+            },
+          },
+          required: ['rows'],
         },
-      ],
+        // 下書きなので長文は不要。使いすぎを防ぐ意味でも絞っておく
+        maxOutputTokens: 2048,
+        temperature: 0.4,
+      },
     })
 
-    if (!response.parsed_output) {
+    // スキーマで縛っていても、こちらでも検証してから返す
+    const parsedResult = draftSchema.safeParse(parseJsonResponse(response.text))
+    if (!parsedResult.success) {
       return NextResponse.json({ error: '下書きを作れませんでした' }, { status: 502 })
     }
 
-    return NextResponse.json(response.parsed_output)
+    return NextResponse.json(parsedResult.data)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'AIの呼び出しに失敗しました'
     return NextResponse.json({ error: message }, { status: 500 })
