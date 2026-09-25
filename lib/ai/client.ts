@@ -1,0 +1,53 @@
+import 'server-only'
+
+import { GoogleGenAI, Type } from '@google/genai'
+
+// AI機能で使う Gemini クライアント。
+// ⚠️ APIキーはサーバー専用。NEXT_PUBLIC_ を付けず、ブラウザへ渡さないこと。
+//
+// モデルは環境変数で差し替えられるようにしている。
+// 無料枠のあるモデルは変わりうるので、コード変更なしで切り替えたいため。
+export const AI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.5-flash'
+
+export { Type }
+
+export function createAiClient() {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    throw new Error('AI機能が未設定です（GEMINI_API_KEY）')
+  }
+  return new GoogleGenAI({ apiKey })
+}
+
+/** モデルの返した JSON を安全に取り出す。壊れていれば null */
+export function parseJsonResponse(text: string | undefined): unknown {
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+/** 開始日から季節を言葉にする（持ち物の判断材料にする） */
+export function describeSeason(isoDate: string | null | undefined): string {
+  if (!isoDate) return '時期未定'
+  const month = Number(isoDate.split('-')[1])
+  if (!month) return '時期未定'
+  if (month <= 2 || month === 12) return `${month}月（冬）`
+  if (month <= 5) return `${month}月（春）`
+  if (month <= 8) return `${month}月（夏）`
+  return `${month}月（秋）`
+}
+
+/** 泊数（日帰りなら0） */
+export function countNights(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined
+): number {
+  if (!startDate || !endDate || startDate === endDate) return 0
+  const start = new Date(`${startDate}T00:00:00`)
+  const end = new Date(`${endDate}T00:00:00`)
+  const diff = Math.round((end.getTime() - start.getTime()) / 86400000)
+  return diff > 0 ? diff : 0
+}

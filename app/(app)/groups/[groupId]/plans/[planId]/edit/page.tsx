@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import EditPlanClient from './EditPlanClient'
 
+export const metadata = { title: '計画を編集' }
+
 export default async function EditPlanPage({
   params,
 }: {

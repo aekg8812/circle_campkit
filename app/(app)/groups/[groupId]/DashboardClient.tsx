@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -12,6 +12,8 @@ import { useToast } from '@/components/Toast'
 import { buildShareUrl } from '@/lib/liffUrl'
 import { formatJpDateRange } from '@/lib/formatDate'
 import FirstTimeNote from '@/components/FirstTimeNote'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { useDialogDismiss } from '@/components/useDialogDismiss'
 import PasswordInput from '@/components/PasswordInput'
 import {
   formatCapacity,
@@ -21,6 +23,7 @@ import {
   isRecruitmentClosed,
   type RecruitmentInfo,
 } from '@/lib/recruitmentStatus'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Profile = {
   name: string
@@ -67,6 +70,9 @@ type Props = {
 type PlanTab = 'recruiting' | 'in_progress' | 'past' | 'mine'
 
 type SortKey = 'deadline_asc' | 'created_desc' | 'start_asc' | 'created_asc'
+
+// 一覧で最初に見せる件数（これを超える分は「すべて表示」で開く）
+const VISIBLE_COUNT = 5
 
 const sortOptions: { value: SortKey; label: string }[] = [
   { value: 'deadline_asc', label: '締切が近い順' },
@@ -122,6 +128,7 @@ export default function DashboardClient({
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
+  const confirm = useConfirm()
   // 参加パスワードの変更は「グループの作成者」だけができる（サーバ側の認可と一致させる）
   const isGroupCreator = group.created_by === currentUserId
   const myPosition =
@@ -162,6 +169,19 @@ export default function DashboardClient({
   const [pwError, setPwError] = useState<string | null>(null)
   // グループの名前・画像の編集（メンバーなら誰でも）
   const [showEditModal, setShowEditModal] = useState(false)
+  // 一覧は最初の数件だけ出す。
+  // ページの中にスクロール領域を作ると、スマホで「どちらが動くか」が
+  // 指の位置で変わってしまい、操作しづらくなるため。
+  const [showAllMembers, setShowAllMembers] = useState(false)
+  const [showAllPlans, setShowAllPlans] = useState(false)
+
+  // どのモーダルも Escape で閉じられるようにする
+  const closeQr = useCallback(() => setShowQr(false), [])
+  const closePwModal = useCallback(() => setShowPwModal(false), [])
+  const closeEditModal = useCallback(() => setShowEditModal(false), [])
+  useDialogDismiss(closeQr, showQr)
+  useDialogDismiss(closePwModal, showPwModal)
+  useDialogDismiss(closeEditModal, showEditModal)
   const [editName, setEditName] = useState(group.name)
   const [editImageUrl, setEditImageUrl] = useState(group.image_url)
   const [editSaving, setEditSaving] = useState(false)
@@ -177,7 +197,7 @@ export default function DashboardClient({
       upsert: true,
     })
     if (error) {
-      setEditError('画像のアップロードに失敗しました: ' + error.message)
+      setEditError(toUserMessage(error, '画像のアップロードできませんでした。'))
       setEditUploading(false)
       return
     }
@@ -201,7 +221,7 @@ export default function DashboardClient({
 
     setEditSaving(false)
     if (error) {
-      setEditError('保存に失敗しました: ' + error.message)
+      setEditError(toUserMessage(error, '保存できませんでした。'))
       return
     }
     setShowEditModal(false)
@@ -267,7 +287,7 @@ export default function DashboardClient({
       p_new_password: pwForm.password,
     })
     if (error) {
-      setPwError(error.message)
+      setPwError(toUserMessage(error, 'パスワードを変更できませんでした。'))
       setPwSaving(false)
       return
     }
@@ -302,14 +322,23 @@ export default function DashboardClient({
   }
 
   const handleLeave = async () => {
-    if (!confirm(`「${group.name}」から脱退しますか？`)) return
+    if (
+      !(await confirm({
+        title: `「${group.name}」から脱退しますか？`,
+        message: 'このグループの計画が見られなくなります。参加し直すにはパスワードが必要です。',
+        confirmLabel: '脱退する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     setLeaving(true)
     setLeaveError(null)
     const { error } = await supabase.rpc('leave_group', {
       p_group_id: group.id,
     })
     if (error) {
-      setLeaveError(error.message)
+      setLeaveError(toUserMessage(error, '脱退できませんでした。'))
       setLeaving(false)
       return
     }
@@ -328,6 +357,7 @@ export default function DashboardClient({
               alt={group.name}
               width={800}
               height={160}
+              sizes="(min-width: 1024px) 1024px, 100vw"
               className="object-cover w-full h-full"
             />
           ) : (
@@ -343,7 +373,7 @@ export default function DashboardClient({
               onClick={() => setMenuOpen((open) => !open)}
               aria-expanded={menuOpen}
               aria-label="グループのメニュー"
-              className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+              className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-ui ${
                 menuOpen
                   ? 'border-green-400 bg-green-50 text-green-700'
                   : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
@@ -361,28 +391,28 @@ export default function DashboardClient({
             <div className="mt-3 space-y-4 rounded-xl border border-gray-100 bg-gray-50/60 p-4">
               {/* 招待 */}
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
                   メンバーを招待
                 </p>
                 <div className="grid gap-2 sm:grid-cols-3">
                   <button
                     type="button"
                     onClick={copyInviteUrl}
-                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
+                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition-ui hover:border-green-400 hover:bg-green-50"
                   >
                     {inviteCopied ? 'コピーしました' : '招待リンク'}
                   </button>
                   <button
                     type="button"
                     onClick={openQr}
-                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition hover:border-green-400 hover:bg-green-50"
+                    className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition-ui hover:border-green-400 hover:bg-green-50"
                   >
                     QRコード
                   </button>
                   <button
                     type="button"
                     onClick={shareOnLine}
-                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-green-700"
+                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition-ui hover:bg-green-700"
                   >
                     LINEで招待
                   </button>
@@ -391,7 +421,7 @@ export default function DashboardClient({
 
               {/* 自分の役職 */}
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
                   自分の役職
                 </p>
                 <select
@@ -406,14 +436,14 @@ export default function DashboardClient({
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-xs text-gray-500">
                   計画書の名簿の「役職」に反映されます。
                 </p>
               </div>
 
               {/* グループ設定 */}
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
                   グループ設定
                 </p>
                 <div className="space-y-2">
@@ -425,10 +455,16 @@ export default function DashboardClient({
                       setEditError(null)
                       setShowEditModal(true)
                     }}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition hover:border-green-400 hover:text-green-700"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition-ui hover:border-green-400 hover:text-green-700"
                   >
                     ✏️ グループ名・画像を編集
                   </button>
+                  <Link
+                    href={`/groups/${group.id}/document-template`}
+                    className="pressable rounded-lg border border-gray-200 px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:border-green-400 hover:text-green-700"
+                  >
+                    📄 計画書の様式を編集
+                  </Link>
                   {isGroupCreator && (
                     <button
                       type="button"
@@ -437,7 +473,7 @@ export default function DashboardClient({
                         setPwError(null)
                         setShowPwModal(true)
                       }}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition hover:border-green-400 hover:text-green-700"
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 transition-ui hover:border-green-400 hover:text-green-700"
                     >
                       🔑 参加パスワードを変更
                     </button>
@@ -446,7 +482,7 @@ export default function DashboardClient({
                     type="button"
                     onClick={handleLeave}
                     disabled={leaving}
-                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-left text-sm font-semibold text-red-600 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-left text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
                   >
                     {leaving ? '処理中...' : '🚪 このグループを脱退'}
                   </button>
@@ -463,11 +499,11 @@ export default function DashboardClient({
 
       {/* メンバー一覧 */}
       <section>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
           メンバー（{members.length}人）
         </h2>
-        <div className="max-h-96 overflow-y-auto rounded-2xl bg-white shadow-sm divide-y divide-gray-100">
-          {members.map((m) => {
+        <div className="reveal-stagger divide-y divide-gray-100 rounded-2xl bg-white shadow-sm">
+          {(showAllMembers ? members : members.slice(0, VISIBLE_COUNT)).map((m) => {
             const proposed = plansByCreator.get(m.user_id) ?? []
             return (
               <div key={m.id} className="flex items-start gap-3 px-4 py-3">
@@ -481,7 +517,7 @@ export default function DashboardClient({
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <span className="text-base text-gray-400">&#128100;</span>
+                    <span className="text-base text-gray-500">&#128100;</span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -492,16 +528,16 @@ export default function DashboardClient({
                     )}
                   </p>
                   {m.profiles?.grade != null && (
-                    <p className="text-xs text-gray-400">{m.profiles.grade}年生</p>
+                    <p className="text-xs text-gray-500">{m.profiles.grade}年生</p>
                   )}
                   {proposed.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
-                      <span className="text-xs text-gray-400">起案:</span>
+                      <span className="text-xs text-gray-500">起案:</span>
                       {proposed.map((plan) => (
                         <Link
                           key={plan.id}
                           href={`/groups/${group.id}/plans/${plan.id}`}
-                          className="inline-flex max-w-[10rem] items-center gap-1 truncate rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 transition hover:bg-green-100"
+                          className="inline-flex max-w-[10rem] items-center gap-1 truncate rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 transition-ui hover:bg-green-100"
                         >
                           {plan.title}
                         </Link>
@@ -509,24 +545,33 @@ export default function DashboardClient({
                     </div>
                   )}
                 </div>
-                <span className="flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                <span className="flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                   {m.position}
                 </span>
               </div>
             )
           })}
         </div>
+        {members.length > VISIBLE_COUNT && !showAllMembers && (
+          <button
+            type="button"
+            onClick={() => setShowAllMembers(true)}
+            className="pressable mt-2 w-full rounded-xl border border-gray-200 bg-white py-2.5 text-xs font-semibold text-gray-600 hover:border-green-400 hover:text-green-700"
+          >
+            すべて表示（{members.length}人）
+          </button>
+        )}
       </section>
 
       {/* 計画一覧 */}
       <section>
         <div className="mb-1 flex items-center justify-between gap-3">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500">
             計画
           </h2>
           <Link
             href={`/groups/${group.id}/plans/new`}
-            className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-95"
+            className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-ui hover:bg-green-700 active:scale-95"
           >
             ＋ 計画を作成
           </Link>
@@ -564,7 +609,7 @@ export default function DashboardClient({
 
           {/* 並び替え */}
           <div className="flex items-center justify-end gap-2 border-b border-gray-100 px-4 py-2">
-            <label htmlFor="plan-sort" className="text-xs text-gray-400">
+            <label htmlFor="plan-sort" className="text-xs text-gray-500">
               並び替え
             </label>
             <select
@@ -610,8 +655,8 @@ export default function DashboardClient({
               }
             />
           ) : (
-            <div className="max-h-[32rem] divide-y divide-gray-100 overflow-y-auto">
-              {visiblePlans.map((plan) => {
+            <div className="reveal-stagger divide-y divide-gray-100">
+              {(showAllPlans ? visiblePlans : visiblePlans.slice(0, VISIBLE_COUNT)).map((plan) => {
                 const recruitment = recruitmentByPlan[plan.id]
                 const deadlineStatus = getDeadlineStatus(recruitment?.deadline ?? null)
                 const phase = phaseOf(plan)
@@ -622,7 +667,7 @@ export default function DashboardClient({
                   <Link
                     key={plan.id}
                     href={`/groups/${group.id}/plans/${plan.id}`}
-                    className="block px-4 py-4 transition hover:bg-gray-50"
+                    className="pressable block px-4 py-4 hover:bg-gray-50"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -634,7 +679,7 @@ export default function DashboardClient({
                             .filter(Boolean)
                             .join(' ／ ') || '日程・場所未設定'}
                         </p>
-                        <p className="mt-1 text-xs text-gray-400">
+                        <p className="mt-1 text-xs text-gray-500">
                           起案者: {plan.creator_id ? (nameByUserId.get(plan.creator_id) ?? '不明') : '不明'}
                         </p>
 
@@ -642,7 +687,7 @@ export default function DashboardClient({
                         {showRecruitmentInfo && (
                           <div className="mt-2 flex flex-wrap items-center gap-1.5">
                             {recruitment.is_closed ? (
-                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
                                 締め切り済み
                               </span>
                             ) : (
@@ -671,7 +716,7 @@ export default function DashboardClient({
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-1.5">
                         {plan.creator_id === currentUserId ? (
-                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                             起案者
                           </span>
                         ) : (
@@ -687,6 +732,15 @@ export default function DashboardClient({
                   </Link>
                 )
               })}
+              {visiblePlans.length > VISIBLE_COUNT && !showAllPlans && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllPlans(true)}
+                  className="pressable w-full py-3 text-xs font-semibold text-gray-600 hover:text-green-700"
+                >
+                  すべて表示（{visiblePlans.length}件）
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -715,13 +769,13 @@ export default function DashboardClient({
               alt="グループ参加用のQRコード"
               className="mx-auto mt-4 h-56 w-56 rounded-xl border border-gray-100"
             />
-            <p className="mt-3 text-xs text-gray-400">
+            <p className="mt-3 text-xs text-gray-500">
               参加にはパスワードも必要です（別途共有してください）
             </p>
             <button
               type="button"
               onClick={() => setShowQr(false)}
-              className="mt-4 w-full rounded-lg bg-gray-100 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+              className="mt-4 w-full rounded-lg bg-gray-100 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
             >
               閉じる
             </button>
@@ -750,8 +804,9 @@ export default function DashboardClient({
 
             <form onSubmit={saveGroup} className="mt-4 space-y-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">グループ名</label>
+                <label htmlFor="group-edit-name" className="mb-1 block text-xs font-medium text-gray-600">グループ名</label>
                 <input
+                  id="group-edit-name"
                   value={editName}
                   onChange={(event) => setEditName(event.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -760,7 +815,7 @@ export default function DashboardClient({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">グループ画像</label>
+                <label htmlFor="group-edit-image" className="mb-1 block text-xs font-medium text-gray-600">グループ画像</label>
                 <div className="flex items-center gap-3">
                   <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
                     {editImageUrl ? (
@@ -772,10 +827,11 @@ export default function DashboardClient({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-2xl text-gray-300">⛺</span>
+                      <span className="text-2xl text-gray-400">⛺</span>
                     )}
                   </div>
                   <input
+                    id="group-edit-image"
                     type="file"
                     accept="image/*"
                     disabled={editUploading}
@@ -787,7 +843,7 @@ export default function DashboardClient({
                   />
                 </div>
                 {editUploading && (
-                  <p className="mt-1 text-xs text-gray-400">アップロード中...</p>
+                  <p className="mt-1 text-xs text-gray-500">アップロード中...</p>
                 )}
               </div>
 
@@ -802,7 +858,7 @@ export default function DashboardClient({
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
                 >
                   キャンセル
                 </button>
@@ -859,7 +915,7 @@ export default function DashboardClient({
                 <button
                   type="button"
                   onClick={() => setShowPwModal(false)}
-                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
                 >
                   キャンセル
                 </button>
@@ -884,10 +940,10 @@ function PlanTabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 py-3 text-sm font-semibold transition ${
+      className={`flex-1 py-3 text-sm font-semibold transition-ui ${
         active
           ? 'border-b-2 border-green-600 text-green-700'
-          : 'text-gray-400 hover:text-gray-600'
+          : 'text-gray-500 hover:text-gray-600'
       }`}
     >
       {label}

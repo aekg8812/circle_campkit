@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z
   .object({
@@ -68,7 +69,7 @@ export default function NewGroupPage() {
         .from('group-images')
         .upload(path, imageFile)
       if (uploadError) {
-        setServerError('画像のアップロードに失敗しました: ' + uploadError.message)
+        setServerError(toUserMessage(uploadError, '画像のアップロードできませんでした。'))
         return
       }
       const { data: urlData } = supabase.storage
@@ -83,7 +84,7 @@ export default function NewGroupPage() {
       p_password: data.password,
     })
     if (error) {
-      setServerError('グループの作成に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, 'グループの作成できませんでした。'))
       return
     }
     router.push(`/groups/${groupId}`)
@@ -92,7 +93,7 @@ export default function NewGroupPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/groups" className="text-gray-400 hover:text-gray-600 text-sm">
+        <Link href="/groups" className="text-gray-500 hover:text-gray-600 text-sm">
           ← 戻る
         </Link>
         <h1 className="text-xl font-bold text-gray-800">グループを作成</h1>
@@ -108,11 +109,11 @@ export default function NewGroupPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* グループ画像 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="group-image" className="block text-sm font-medium text-gray-700 mb-1">
               グループ画像（任意）
             </label>
             <div
-              className="w-full h-36 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-green-400 transition overflow-hidden bg-gray-50"
+              className="w-full h-36 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-green-400 transition-ui overflow-hidden bg-gray-50"
               onClick={() => fileInputRef.current?.click()}
             >
               {imagePreview ? (
@@ -124,11 +125,12 @@ export default function NewGroupPage() {
                   className="object-cover w-full h-full"
                 />
               ) : (
-                <span className="text-sm text-gray-400">クリックして画像を選択</span>
+                <span className="text-sm text-gray-500">クリックして画像を選択</span>
               )}
             </div>
             <input
               ref={fileInputRef}
+              id="group-image"
               type="file"
               accept="image/*"
               className="hidden"
@@ -138,11 +140,13 @@ export default function NewGroupPage() {
 
           {/* グループ名 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="group-name" className="block text-sm font-medium text-gray-700 mb-1">
               グループ名 *
             </label>
             <input
               {...register('name')}
+              id="group-name"
+              autoComplete="off"
               className={inputClass}
               placeholder="○○大学アウトドアサークル"
             />
@@ -153,15 +157,17 @@ export default function NewGroupPage() {
 
           {/* 参加用パスワード */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="group-password" className="block text-sm font-medium text-gray-700 mb-1">
               参加用パスワード *
             </label>
-            <p className="text-xs text-gray-400 mb-1">
+            <p className="text-xs text-gray-500 mb-1">
               このパスワードを知るメンバーだけがグループに参加できます
             </p>
             <input
               {...register('password')}
+              id="group-password"
               type="password"
+              autoComplete="off"
               className={inputClass}
               placeholder="4文字以上"
             />
@@ -171,12 +177,14 @@ export default function NewGroupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="group-password-confirm" className="block text-sm font-medium text-gray-700 mb-1">
               パスワード（確認）*
             </label>
             <input
               {...register('confirmPassword')}
+              id="group-password-confirm"
               type="password"
+              autoComplete="off"
               className={inputClass}
               placeholder="もう一度入力してください"
             />

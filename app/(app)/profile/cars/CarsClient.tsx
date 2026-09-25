@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z.object({
   name: z.string().optional().nullable(),
@@ -27,6 +29,7 @@ type Props = {
 
 export default function CarsClient({ initialCars, userId }: Props) {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [cars, setCars] = useState<Car[]>(initialCars)
   const [editing, setEditing] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -64,7 +67,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
         .eq('id', editing)
         .select()
         .single()
-      if (error) { setServerError(error.message); return }
+      if (error) { setServerError(toUserMessage(error, '車の情報を保存できませんでした。')); return }
       setCars((prev) => prev.map((c) => (c.id === editing ? updated : c)))
     } else {
       const { data: created, error } = await supabase
@@ -72,7 +75,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
         .insert({ ...data, owner_id: userId })
         .select()
         .single()
-      if (error) { setServerError(error.message); return }
+      if (error) { setServerError(toUserMessage(error, '車の情報を保存できませんでした。')); return }
       setCars((prev) => [created, ...prev])
     }
     setShowForm(false)
@@ -80,9 +83,17 @@ export default function CarsClient({ initialCars, userId }: Props) {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('この車を削除しますか？')) return
+    if (
+      !(await confirm({
+        title: 'この車を削除しますか？',
+        confirmLabel: '削除する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     const { error } = await supabase.from('cars').delete().eq('id', id)
-    if (error) { setServerError(error.message); return }
+    if (error) { setServerError(toUserMessage(error, '車の情報を保存できませんでした。')); return }
     setCars((prev) => prev.filter((c) => c.id !== id))
   }
 
@@ -94,7 +105,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
 
       <button
         onClick={openAdd}
-        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition"
+        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-ui"
       >
         ＋ 車を追加
       </button>
@@ -122,14 +133,14 @@ export default function CarsClient({ initialCars, userId }: Props) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50 text-sm"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
               >
                 {isSubmitting ? '保存中...' : '保存'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition text-sm"
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition-ui text-sm"
               >
                 キャンセル
               </button>
@@ -139,7 +150,7 @@ export default function CarsClient({ initialCars, userId }: Props) {
       )}
 
       {cars.length === 0 ? (
-        <p className="text-center text-gray-400 py-10 text-sm">登録された車はありません</p>
+        <p className="text-center text-gray-500 py-10 text-sm">登録された車はありません</p>
       ) : (
         <div className="space-y-3">
           {cars.map((car) => (
@@ -192,9 +203,12 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {/* label で囲むことで、ラベル文字をタップしても入力欄に移動できる */}
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-gray-700">{label}</span>
+        {children}
+      </label>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   )
 }

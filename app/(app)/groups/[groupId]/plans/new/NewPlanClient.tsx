@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
 import { PLAN_TEMPLATES, type PlanTemplate } from '@/lib/planTemplates'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Group = {
   id: string
@@ -27,7 +29,7 @@ type ScheduleRow = {
 }
 
 const inputClass =
-  'w-full border border-gray-300 rounded-lg bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500'
+  'w-full border border-gray-300 rounded-lg bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500'
 
 const transportOptions = ['未定', '車', '公共交通', '徒歩', 'その他']
 const scheduleLabels = ['集合', '出発', '到着', '解散', '休憩', '買い出し']
@@ -60,9 +62,21 @@ function addDays(base: Date, days: number): string {
 export default function NewPlanClient({ group, currentUserId }: Props) {
   const router = useRouter()
   const supabase = createClient()
+  const confirm = useConfirm()
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  // AIによる行程表の下書き
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  // 送信エラーは、押したボタンのすぐ上に出す。
+  // フォームが長いため、画面上部に出すと押した人には見えないまま終わる。
+  const errorRef = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    if (!serverError) return
+    errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [serverError])
 
   // 基本情報
   const [basic, setBasic] = useState({
@@ -90,10 +104,16 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
   const [rows, setRows] = useState<ScheduleRow[]>([emptyRow()])
 
   // テンプレートを選んで一括入力する
-  const applyTemplate = (template: PlanTemplate) => {
+  const applyTemplate = async (template: PlanTemplate) => {
+    const hasInput =
+      basic.title.trim() !== '' || rows.some((row) => row.location_name.trim() !== '')
     if (
-      (basic.title.trim() !== '' || rows.some((row) => row.location_name.trim() !== '')) &&
-      !confirm('入力中の内容をテンプレートの内容で置き換えます。よろしいですか？')
+      hasInput &&
+      !(await confirm({
+        title: 'テンプレートで置き換えますか？',
+        message: '入力中の内容は、テンプレートの内容で上書きされます。',
+        confirmLabel: '置き換える',
+      }))
     ) {
       return
     }
@@ -128,6 +148,76 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
 
     // コピーしたらテンプレート一覧は閉じて、フォームに集中できるようにする
     setShowTemplates(false)
+  }
+
+  // AIに行程表の下書きを作ってもらい、そのままフォームに流し込む。
+  // 保存はせず、あくまで下書きなので、このあと手で直して使う。
+  const generateScheduleWithAi = async () => {
+    setAiError(null)
+
+    if (basic.title.trim() === '') {
+      setAiError('先に行事名を入力してください')
+      return
+    }
+
+    if (
+      rows.some((row) => row.location_name.trim() !== '') &&
+      !(await confirm({
+        title: '行程表を下書きで置き換えますか？',
+        message: '入力中の行程は、AIが作った下書きで上書きされます。',
+        confirmLabel: '置き換える',
+      }))
+    ) {
+      return
+    }
+
+    setAiLoading(true)
+    try {
+      const response = await fetch('/api/ai/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId: group.id,
+          title: basic.title.trim(),
+          category: basic.category,
+          area: basic.area,
+          startDate: basic.start_date,
+          endDate: basic.end_date,
+          transport: basic.default_transport,
+        }),
+      })
+      const result = await response.json()
+
+      if (!response.ok) {
+        setAiError(result.error ?? '下書きの作成に失敗しました')
+        setAiLoading(false)
+        return
+      }
+
+      // 日付は開始日を基準に組み立てる（未入力なら空のままにする）
+      const base = basic.start_date ? new Date(`${basic.start_date}T00:00:00`) : null
+      setRows(
+        (result.rows ?? []).map(
+          (row: {
+            dayOffset: number
+            time: string
+            timeLabel: string
+            locationName: string
+            note: string
+          }) => ({
+            day: base ? addDays(base, row.dayOffset) : '',
+            time: row.time ?? '',
+            time_label: row.timeLabel ?? '',
+            location_name: row.locationName ?? '',
+            note: row.note ?? '',
+            transport: '',
+          })
+        )
+      )
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : '下書きの作成に失敗しました')
+    }
+    setAiLoading(false)
   }
 
   const addRow = () => setRows((current) => [...current, emptyRow(basic.start_date)])
@@ -202,7 +292,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
       .single()
 
     if (error || !created) {
-      setServerError('計画の作成に失敗しました: ' + (error?.message ?? ''))
+      setServerError(toUserMessage(error, '計画の作成できませんでした。'))
       setSubmitting(false)
       return
     }
@@ -227,7 +317,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
         }))
       )
       if (scheduleError) {
-        setServerError('計画は作成されましたが、行程の保存に失敗しました: ' + scheduleError.message)
+        setServerError(toUserMessage(scheduleError, '計画は作成されましたが、行程の保存できませんでした。'))
         setSubmitting(false)
         router.push(`/groups/${group.id}/plans/${created.id}`)
         return
@@ -244,7 +334,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
         is_closed: false,
       })
       if (recError) {
-        setServerError('計画は作成されましたが、募集設定の保存に失敗しました: ' + recError.message)
+        setServerError(toUserMessage(recError, '計画は作成されましたが、募集設定の保存できませんでした。'))
         setSubmitting(false)
         router.push(`/groups/${group.id}/plans/${created.id}`)
         return
@@ -262,16 +352,12 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
           ← 戻る
         </Link>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             {group.name}
           </p>
           <h1 className="text-xl font-bold text-gray-800">計画を作成</h1>
         </div>
       </div>
-
-      {serverError && (
-        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{serverError}</p>
-      )}
 
       {/* テンプレートから作成（ボタンを押すと一覧が開く） */}
       <section className="mb-5 rounded-2xl bg-white p-4 shadow-sm">
@@ -283,11 +369,11 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
         >
           <span>
             <span className="text-sm font-bold text-gray-700">📋 テンプレートから作成</span>
-            <span className="ml-2 text-xs text-gray-400">（任意・選ぶと一括入力）</span>
+            <span className="ml-2 text-xs text-gray-500">（任意・選ぶと一括入力）</span>
           </span>
           <span
             aria-hidden
-            className={`text-lg text-gray-400 transition ${showTemplates ? 'rotate-45' : ''}`}
+            className={`text-lg text-gray-500 transition-ui ${showTemplates ? 'rotate-45' : ''}`}
           >
             ＋
           </span>
@@ -313,7 +399,7 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
                     <button
                       type="button"
                       onClick={() => applyTemplate(template)}
-                      className="mt-2 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 transition hover:bg-green-100"
+                      className="mt-2 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 transition-ui hover:bg-green-100"
                     >
                       📋 この内容をコピー
                     </button>
@@ -428,8 +514,16 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
             <h2 className="text-sm font-bold text-gray-700">行程表（任意）</h2>
             <button
               type="button"
+              onClick={generateScheduleWithAi}
+              disabled={aiLoading}
+              className="pressable rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:border-green-400 disabled:opacity-50"
+            >
+              {aiLoading ? '作成中...' : '✨ AIで下書きを作る'}
+            </button>
+            <button
+              type="button"
               onClick={addRow}
-              className="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+              className="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition-ui hover:bg-green-100"
             >
               ＋ 行程を追加
             </button>
@@ -437,12 +531,15 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
           <p className="mb-3 text-xs text-gray-500">
             集合・到着・解散などの流れを入れられます（あとで詳細画面でも追加・編集できます）。
           </p>
+          {aiError && (
+            <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{aiError}</p>
+          )}
 
           {rows.length === 0 ? (
             <button
               type="button"
               onClick={addRow}
-              className="w-full rounded-lg border border-dashed border-gray-300 px-4 py-4 text-center text-sm text-gray-400 transition hover:border-green-400 hover:text-green-600"
+              className="w-full rounded-lg border border-dashed border-gray-300 px-4 py-4 text-center text-sm text-gray-500 transition-ui hover:border-green-400 hover:text-green-600"
             >
               ＋ 行程を追加する
             </button>
@@ -581,6 +678,16 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
           グループへの公開は、計画の詳細画面の「📣 募集を開始する」から行えます。
         </p>
 
+        {serverError && (
+          <p
+            ref={errorRef}
+            role="alert"
+            className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600"
+          >
+            {serverError}
+          </p>
+        )}
+
         <button type="submit" disabled={submitting} className="btn-primary w-full py-3">
           {submitting ? '作成中...' : '計画を作成'}
         </button>
@@ -591,9 +698,10 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
+    <label className="block">
+      {/* label で囲むことで、ラベル文字をタップしても入力欄に移動できる */}
+      <span className="mb-1 block text-sm font-medium text-gray-700">{label}</span>
       {children}
-    </div>
+    </label>
   )
 }

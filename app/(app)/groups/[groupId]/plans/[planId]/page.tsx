@@ -2,6 +2,21 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PlanDetailClient from './PlanDetailClient'
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ planId: string }>
+}) {
+  const { planId } = await params
+  const supabase = await createClient()
+  const { data: plan } = await supabase
+    .from('plans')
+    .select('title')
+    .eq('id', planId)
+    .maybeSingle()
+  return { title: plan?.title ?? '計画' }
+}
+
 export default async function PlanDetailPage({
   params,
 }: {

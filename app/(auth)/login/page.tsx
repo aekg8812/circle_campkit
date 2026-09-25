@@ -93,7 +93,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={resendConfirmation}
                 disabled={resending}
-                className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition-ui hover:bg-amber-700 disabled:opacity-50"
               >
                 {resending ? '送信中...' : '確認メールを再送する'}
               </button>
@@ -103,12 +103,15 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
               メールアドレス
             </label>
             <input
               {...register('email')}
+              id="login-email"
               type="email"
+              autoComplete="email"
+              inputMode="email"
               placeholder="example@kyutech.ac.jp"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
@@ -118,11 +121,13 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
               パスワード
             </label>
             <PasswordInput
               {...register('password')}
+              id="login-password"
+              autoComplete="current-password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
             {errors.password && (
@@ -148,7 +153,7 @@ export default function LoginPage() {
           </Link>
         </p>
       <p className="text-sm text-center mt-2">
-        <Link href="/forgot-password" className="text-gray-400 hover:text-green-600 hover:underline">
+        <Link href="/forgot-password" className="text-gray-500 hover:text-green-600 hover:underline">
           パスワードをお忘れですか？
         </Link>
       </p>

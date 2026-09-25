@@ -31,7 +31,7 @@ export default async function RootPage() {
           </span>
           <Link
             href="/login"
-            className="rounded-full bg-white/15 px-5 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/25"
+            className="rounded-full bg-white/15 px-5 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-ui hover:bg-white/25"
           >
             ログイン
           </Link>
@@ -55,13 +55,13 @@ export default async function RootPage() {
           <div className="animate-fade-in-up mt-9 flex w-full max-w-xs flex-col gap-3 [animation-delay:240ms] sm:max-w-none sm:flex-row sm:justify-center">
             <Link
               href="/signup"
-              className="rounded-2xl bg-green-600 px-8 py-4 text-base font-bold text-white shadow-lg shadow-green-900/20 transition hover:bg-green-500 hover:shadow-xl active:scale-[0.98]"
+              className="rounded-2xl bg-green-600 px-8 py-4 text-base font-bold text-white shadow-lg shadow-green-900/20 transition-ui hover:bg-green-500 hover:shadow-xl active:scale-[0.98]"
             >
               無料ではじめる
             </Link>
             <Link
               href="/login"
-              className="rounded-2xl bg-white/90 px-8 py-4 text-base font-bold text-gray-800 shadow-lg backdrop-blur-sm transition hover:bg-white active:scale-[0.98]"
+              className="rounded-2xl bg-white/90 px-8 py-4 text-base font-bold text-gray-800 shadow-lg backdrop-blur-sm transition-ui hover:bg-white active:scale-[0.98]"
             >
               ログイン
             </Link>

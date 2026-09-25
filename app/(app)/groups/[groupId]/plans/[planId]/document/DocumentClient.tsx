@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
 import {
@@ -20,7 +21,17 @@ import {
 } from '@/lib/planDocument'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
 import { useToast } from '@/components/Toast'
+import { useDialogDismiss } from '@/components/useDialogDismiss'
+import {
+  hasSource,
+  isCustomRow,
+  parseDocumentTemplate,
+  resolveDocumentRows,
+} from '@/lib/documentTemplate'
 import FirstTimeNote from '@/components/FirstTimeNote'
+import { toUserMessage } from '@/lib/errorMessage'
+
+type DocumentStep = 'input' | 'preview' | 'submit'
 
 type Group = { id: string; name: string }
 
@@ -69,6 +80,7 @@ type PlanDocumentRow = {
   hospital_phone: string | null
   hospital_distance: string | null
   notes: string | null
+  custom_values: Record<string, string> | null
 }
 
 type Props = {
@@ -83,10 +95,12 @@ type Props = {
   previousDocument: PlanDocumentRow | null
   creatorProfile: ProfileRow | null
   leaderProfile: ProfileRow | null
+  /** グループが決めた様式。null なら標準様式 */
+  documentTemplate: unknown
 }
 
 const inputClass =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500'
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500'
 
 function todayIso() {
   const now = new Date()
@@ -109,12 +123,43 @@ export default function DocumentClient({
   previousDocument,
   creatorProfile,
   leaderProfile,
+  documentTemplate,
 }: Props) {
   const supabase = createClient()
   const toast = useToast()
   // 計画書はグループのメンバーなら誰でも編集できる（分担して入力できるように）
   const canEdit = true
-  const [saving, setSaving] = useState(false)
+  // 保存状態（自動保存の進み具合を控えめに見せる）
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  // 作業は「入力 → 確認 → 提出」の一直線なので、画面もその順に分ける。
+  // 現在位置をURLに持たせることで、戻る操作と再読み込みで位置が保たれる。
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const stepParam = searchParams.get('step')
+  const step: DocumentStep =
+    stepParam === 'preview' || stepParam === 'submit' ? stepParam : 'input'
+
+  const goToStep = (next: DocumentStep) => {
+    router.replace(`?step=${next}`, { scroll: true })
+  }
+
+  // A4のプレビューは小さい画面に収まらないため、全画面で見せる
+  const [previewOpen, setPreviewOpen] = useState(false)
+
+  // グループが決めた様式（未設定なら標準様式）
+  const templateRows = useMemo(
+    () => parseDocumentTemplate(documentTemplate),
+    [documentTemplate]
+  )
+
+  // 自分で足した項目に入力された値
+  const [customValues, setCustomValues] = useState<Record<string, string>>(
+    () => planDocument?.custom_values ?? {}
+  )
+
+  const setCustomValue = (key: string, value: string) =>
+    setCustomValues((current) => ({ ...current, [key]: value }))
   const [generating, setGenerating] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [representativeId, setRepresentativeId] = useState<string | null>(
@@ -145,7 +190,7 @@ export default function DocumentClient({
     setForm((current) => ({ ...current, [key]: value }))
 
   // フォームの値と参加者情報から、プレビュー/PDF 共通のデータを組み立てる
-  const documentData: PlanDocumentData = useMemo(() => {
+  const documentBase: Omit<PlanDocumentData, 'rows'> = useMemo(() => {
     const positions = new Map(
       memberPositions.map((member) => [member.user_id, member.position])
     )
@@ -195,7 +240,31 @@ export default function DocumentClient({
     leaderProfile,
   ])
 
-  // 参加者ごとに、名簿で空欄になる項目を洗い出す（提出前チェック）
+  // 様式に沿って、表に出す行を組み立てる。
+  // プレビュー・PDF・Excel はいずれもこの rows から描く。
+  const documentData: PlanDocumentData = useMemo(
+    () => ({
+      ...documentBase,
+      rows: resolveDocumentRows(templateRows, documentBase, customValues),
+    }),
+    [documentBase, templateRows, customValues]
+  )
+
+  // 提出前チェック（1）計画書そのものの未入力。
+  // これまで参加者のプロフィールしか見ておらず、顧問教員や宿泊所が
+  // 空欄のままでも何も言われなかった。実際にはそちらの方が提出時に困る。
+  const missingDocumentFields = [
+    { label: '顧問教員の氏名', filled: form.advisor_name.trim() !== '' },
+    { label: '顧問教員の所属', filled: form.advisor_affiliation.trim() !== '' },
+    { label: '顧問教員のTEL', filled: form.advisor_phone.trim() !== '' },
+    { label: '宿泊所の住所', filled: form.lodging_address.trim() !== '' },
+    { label: '周辺の病院名', filled: form.hospital_name.trim() !== '' },
+    { label: '病院のTEL', filled: form.hospital_phone.trim() !== '' },
+  ]
+    .filter((field) => !field.filled)
+    .map((field) => field.label)
+
+  // 提出前チェック（2）参加者ごとに、名簿で空欄になる項目を洗い出す
   const incompleteParticipants = participants
     .map((participant) => ({
       name: participant.profiles?.name ?? '名前未設定',
@@ -203,9 +272,11 @@ export default function DocumentClient({
     }))
     .filter((entry) => entry.missing.length > 0)
 
-  const saveDocument = async () => {
-    setMessage(null)
-    setSaving(true)
+  // 入力が止まってから自動で保存する。
+  // 項目が15以上あり、スマホで埋めている途中に離脱すると全部消えていたため、
+  // 「保存ボタンを押し忘れる」という事故そのものを無くす。
+  const persistDocument = useCallback(async () => {
+    setSaveState('saving')
 
     const { error } = await supabase.from('plan_documents').upsert(
       {
@@ -224,21 +295,35 @@ export default function DocumentClient({
         hospital_phone: form.hospital_phone || null,
         hospital_distance: form.hospital_distance || null,
         notes: form.notes || null,
+        custom_values: customValues,
         representative_user_id: representativeId,
       },
       { onConflict: 'plan_id' }
     )
 
     if (error) {
-      setMessage({ type: 'error', text: '保存に失敗しました: ' + error.message })
-      toast('保存に失敗しました', 'error')
-      setSaving(false)
+      setSaveState('error')
+      setMessage({ type: 'error', text: toUserMessage(error, '保存できませんでした。') })
       return
     }
 
-    toast('計画書の内容を保存しました')
-    setSaving(false)
-  }
+    setMessage(null)
+    setSaveState('saved')
+  }, [supabase, plan.id, form, representativeId, customValues])
+
+  // 初回描画では保存しない（読み込んだ内容をそのまま書き戻さないため）
+  const skipFirstSave = useRef(true)
+
+  useEffect(() => {
+    if (skipFirstSave.current) {
+      skipFirstSave.current = false
+      return
+    }
+    const timer = window.setTimeout(() => {
+      void persistDocument()
+    }, 1500)
+    return () => window.clearTimeout(timer)
+  }, [persistDocument])
 
   /** ファイルをダウンロードさせる共通処理 */
   const saveBlob = (blob: Blob, filename: string) => {
@@ -333,29 +418,16 @@ export default function DocumentClient({
             ← 計画に戻る
           </Link>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {group.name}
             </p>
             <h1 className="text-xl font-bold text-gray-800">計画書（学校提出用）</h1>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => window.print()} className="btn-secondary">
-            印刷
-          </button>
-          <button
-            type="button"
-            onClick={downloadExcel}
-            disabled={exporting}
-            className="btn-secondary"
-          >
-            {exporting ? 'Excelを生成中...' : '📊 Excelで出力'}
-          </button>
-          <button type="button" onClick={downloadPdf} disabled={generating} className="btn-primary">
-            {generating ? 'PDFを生成中...' : '計画書を作成する（PDF）'}
-          </button>
-        </div>
+        <SaveIndicator state={saveState} />
       </div>
+
+      <StepNav step={step} onChange={goToStep} />
 
       {message && (
         <p
@@ -369,8 +441,8 @@ export default function DocumentClient({
         </p>
       )}
 
-      {/* 提出前チェック：名簿の未入力を洗い出す */}
-      {participants.length > 0 && (
+      {/* 提出前チェック：確認ステップでまとめて出す */}
+      {step === 'preview' && participants.length > 0 && (
         <div className="print:hidden">
           {incompleteParticipants.length === 0 ? (
             <p className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
@@ -397,11 +469,19 @@ export default function DocumentClient({
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] print:block">
-        {/* 入力フォーム（グループのメンバーなら誰でも編集できる） */}
-        <section className="space-y-5 self-start rounded-2xl bg-white p-5 shadow-sm print:hidden">
-          <div>
+      {/* 入力フォーム（グループのメンバーなら誰でも編集できる） */}
+      {step === 'input' && (
+        <section className="space-y-5 rounded-2xl bg-white p-5 shadow-sm print:hidden">
+          <div className="flex items-start justify-between gap-3">
             <h2 className="text-sm font-bold text-gray-700">手入力する項目</h2>
+            <Link
+              href={`/groups/${group.id}/document-template`}
+              className="pressable flex-shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-green-400 hover:text-green-700"
+            >
+              様式を編集
+            </Link>
+          </div>
+          <div>
             <p className="mt-1 text-xs text-gray-500">
               行事名・日程・参加者名簿などは計画と参加者のプロフィールから自動反映されます。
               グループのメンバーなら<strong>誰でも編集・保存できます</strong>（分担して入力できます）。
@@ -433,7 +513,7 @@ export default function DocumentClient({
                   )
                 })}
               </select>
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-gray-500">
                 部長が複数いる場合も、ここで誰を代表者にするか選べます。
               </p>
             </Field>
@@ -490,6 +570,7 @@ export default function DocumentClient({
             </Field>
           </FormBlock>
 
+          {hasSource(templateRows, 'lodging') && (
           <FormBlock title="宿泊所">
             <Field label="住所">
               <input
@@ -521,7 +602,9 @@ export default function DocumentClient({
               </Field>
             </div>
           </FormBlock>
+          )}
 
+          {(hasSource(templateRows, 'transport') || hasSource(templateRows, 'hospital')) && (
           <FormBlock title="移動手段・病院">
             <Field label={`移動手段（未入力なら「${plan.default_transport || '未定'}」）`}>
               <input
@@ -572,7 +655,9 @@ export default function DocumentClient({
               </Field>
             </div>
           </FormBlock>
+          )}
 
+          {hasSource(templateRows, 'notes') && (
           <FormBlock title="備考">
             <textarea
               value={form.notes}
@@ -582,27 +667,127 @@ export default function DocumentClient({
               disabled={!canEdit}
             />
           </FormBlock>
+          )}
+
+          {/* このグループが様式に足した項目 */}
+          {templateRows.filter(isCustomRow).length > 0 && (
+            <FormBlock title="このグループで追加した項目">
+              {templateRows.filter(isCustomRow).map((row) => (
+                <Field key={row.key} label={row.label}>
+                  <input
+                    value={customValues[row.key] ?? ''}
+                    onChange={(event) => setCustomValue(row.key, event.target.value)}
+                    className={inputClass}
+                    disabled={!canEdit}
+                  />
+                </Field>
+              ))}
+            </FormBlock>
+          )}
 
           {canEdit && (
-            <button type="button" onClick={saveDocument} disabled={saving} className="btn-primary w-full">
-              {saving ? '保存中...' : '入力内容を保存'}
+            <button type="button" onClick={() => goToStep('preview')} className="btn-primary w-full">
+              見た目を確認する →
             </button>
           )}
         </section>
+      )}
 
-        {/* プレビュー（入力するとリアルタイムに反映） */}
-        <section className="min-w-0">
-          <p className="mb-2 text-xs text-gray-400 print:hidden">
-            プレビュー（入力内容がリアルタイムで反映されます / PDFは2ページ構成で出力されます）
-          </p>
-          <div className="space-y-6 overflow-x-auto" id="plan-document-sheets">
-            <DocumentSheet data={documentData} />
-            <RosterSheet data={documentData} />
+      {step === 'preview' && (
+        <section className="min-w-0 print:hidden">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-500">
+              PDFは2ページ構成（計画書＋参加者名簿）で出力されます
+            </p>
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
+              className="pressable rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-green-400 hover:text-green-700"
+            >
+              原寸で見る
+            </button>
+          </div>
+
+          {/* A4はスマホ幅に収まらないため、小さい画面では全画面表示に誘導する */}
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-center lg:hidden">
+            <p className="text-sm font-semibold text-gray-700">
+              プレビューはA4サイズです
+            </p>
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              この画面幅では文字が小さくなるため、全画面で表示します。
+            </p>
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
+              className="btn-primary mt-3"
+            >
+              プレビューを開く
+            </button>
+          </div>
+
+          <div className="hidden overflow-x-auto lg:block">
+            <div className="space-y-6">
+              <DocumentSheet data={documentData} />
+              <RosterSheet data={documentData} />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" onClick={() => goToStep('input')} className="btn-secondary">
+              ← 入力に戻る
+            </button>
+            <button type="button" onClick={() => goToStep('submit')} className="btn-primary">
+              提出の準備へ →
+            </button>
           </div>
         </section>
+      )}
+
+      {/* 印刷のときだけ現れる本体（どのステップにいても印刷できるようにする） */}
+      <div className="hidden print:block" id="plan-document-sheets">
+        <DocumentSheet data={documentData} />
+        <RosterSheet data={documentData} />
       </div>
 
+      {/* 提出ステップ: ここで初めて出力できる */}
+      {step === 'submit' && (
+        <section className="space-y-3 rounded-2xl bg-white p-5 shadow-sm print:hidden">
+          <h2 className="text-sm font-bold text-gray-700">書類を出力する</h2>
+
+          {(missingDocumentFields.length > 0 || participants.length === 0) && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+              未入力のまま出力できますが、
+              {participants.length === 0 && '参加者が0人です。'}
+              {missingDocumentFields.length > 0 &&
+                `${missingDocumentFields.join('・')}が空欄です。`}
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={downloadPdf} disabled={generating} className="btn-primary">
+              {generating ? 'PDFを生成中...' : '📄 PDFで出力'}
+            </button>
+            <button
+              type="button"
+              onClick={downloadExcel}
+              disabled={exporting}
+              className="btn-secondary"
+            >
+              {exporting ? 'Excelを生成中...' : '📊 Excelで出力'}
+            </button>
+            <button type="button" onClick={() => window.print()} className="btn-secondary">
+              印刷
+            </button>
+          </div>
+
+          <button type="button" onClick={() => goToStep('preview')} className="btn-secondary">
+            ← 確認に戻る
+          </button>
+        </section>
+      )}
+
       {/* メールで提出する方法（送信はせず、手順とコピペ用の定型文を案内） */}
+      {step === 'submit' && (
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/[0.03] print:hidden">
         <h2 className="text-sm font-bold text-gray-700">📧 メールで提出する方法</h2>
         <div className="mt-1">
@@ -638,7 +823,7 @@ export default function DocumentClient({
               <button
                 type="button"
                 onClick={() => copyText(mailSubject, '件名')}
-                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition-ui hover:bg-green-100"
               >
                 コピー
               </button>
@@ -652,7 +837,7 @@ export default function DocumentClient({
               <button
                 type="button"
                 onClick={() => copyText(mailBody, '本文')}
-                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+                className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition-ui hover:bg-green-100"
               >
                 コピー
               </button>
@@ -663,10 +848,19 @@ export default function DocumentClient({
           </div>
         </div>
 
-        <p className="mt-3 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-gray-500">
           ※ 件名・本文は入力内容から自動で作成されます。提出先のルールに合わせて調整してください。
         </p>
       </section>
+      )}
+
+      {/* 全画面プレビュー */}
+      {previewOpen && (
+        <PreviewModal onClose={() => setPreviewOpen(false)}>
+          <DocumentSheet data={documentData} />
+          <RosterSheet data={documentData} />
+        </PreviewModal>
+      )}
     </div>
   )
 }
@@ -707,65 +901,42 @@ function DocumentSheet({ data }: { data: PlanDocumentData }) {
 
       <table className="mt-3 w-full border-collapse [&_td]:border [&_td]:border-gray-800 [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:border-gray-800 [&_th]:px-2 [&_th]:py-1.5">
         <tbody>
-          <tr>
-            <th className="w-24 bg-gray-50 font-normal">行事名</th>
-            <td colSpan={2}>{data.title}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">日時</th>
-            <td colSpan={2}>{data.dateRangeLabel}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">場所</th>
-            <td colSpan={2}>{data.place}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">
-              日程
-              <br />
-              （詳細に）
-            </th>
-            {data.scheduleDays.length === 0 ? (
-              <td colSpan={2} className="text-gray-400">
-                行程が未登録です
-              </td>
-            ) : (
-              data.scheduleDays.slice(0, 2).map((day) => (
-                <td key={day.label} className="align-top" colSpan={data.scheduleDays.length === 1 ? 2 : 1}>
-                  <p className="font-semibold">{day.label}</p>
-                  {day.lines.map((line, index) => (
+          {/* 様式（グループが決めた行の並び）に沿って描く */}
+          {data.rows.map((row) => (
+            <tr key={row.key}>
+              <th className="w-24 bg-gray-50 font-normal align-top">{row.label}</th>
+              {row.kind === 'schedule' ? (
+                row.days.length === 0 ? (
+                  <td colSpan={2} className="text-gray-500">
+                    行程が未登録です
+                  </td>
+                ) : (
+                  row.days.slice(0, 2).map((day) => (
+                    <td
+                      key={day.label}
+                      className="align-top"
+                      colSpan={row.days.length === 1 ? 2 : 1}
+                    >
+                      <p className="font-semibold">{day.label}</p>
+                      {day.lines.map((line, index) => (
+                        <p key={index}>{line}</p>
+                      ))}
+                    </td>
+                  ))
+                )
+              ) : row.kind === 'lines' ? (
+                <td colSpan={2}>
+                  {row.values.map((line, index) => (
                     <p key={index}>{line}</p>
                   ))}
                 </td>
-              ))
-            )}
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">宿泊所</th>
-            <td colSpan={2}>
-              {data.lodgingLines.length === 0
-                ? ''
-                : data.lodgingLines.map((line, index) => <p key={index}>{line}</p>)}
-            </td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">移動手段</th>
-            <td colSpan={2}>{data.transportLabel}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">参加人数</th>
-            <td colSpan={2}>{data.participantCountLabel}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">周辺の病院等</th>
-            <td colSpan={2}>{data.hospitalLabel}</td>
-          </tr>
-          <tr>
-            <th className="bg-gray-50 font-normal">備考</th>
-            <td colSpan={2} className="h-12 whitespace-pre-wrap align-top">
-              {data.notes}
-            </td>
-          </tr>
+              ) : (
+                <td colSpan={2} className="whitespace-pre-wrap">
+                  {row.value}
+                </td>
+              )}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -823,10 +994,99 @@ function UnderlineRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+/** 作業の流れ（入力 → 確認 → 提出）を上部に出す */
+function StepNav({
+  step,
+  onChange,
+}: {
+  step: DocumentStep
+  onChange: (next: DocumentStep) => void
+}) {
+  const steps: { id: DocumentStep; label: string }[] = [
+    { id: 'input', label: '1. 内容を入力' },
+    { id: 'preview', label: '2. 見た目を確認' },
+    { id: 'submit', label: '3. 提出する' },
+  ]
+
+  return (
+    <nav className="flex overflow-hidden rounded-xl border border-gray-200 bg-white print:hidden">
+      {steps.map((item) => {
+        const active = item.id === step
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onChange(item.id)}
+            aria-current={active ? 'step' : undefined}
+            className={`pressable flex-1 px-2 py-2.5 text-xs font-bold sm:text-sm ${
+              active ? 'bg-green-600 text-white' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            {item.label}
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+/** 自動保存の状況。押し忘れの不安をなくすため、状態だけ静かに見せる */
+function SaveIndicator({ state }: { state: 'idle' | 'saving' | 'saved' | 'error' }) {
+  if (state === 'idle') {
+    return <p className="text-xs text-gray-500 print:hidden">入力すると自動で保存されます</p>
+  }
+  if (state === 'saving') {
+    return <p className="text-xs text-gray-500 print:hidden">● 保存中...</p>
+  }
+  if (state === 'saved') {
+    return <p className="text-xs font-semibold text-green-700 print:hidden">✓ 保存しました</p>
+  }
+  return (
+    <p className="text-xs font-semibold text-red-600 print:hidden">
+      ⚠ 保存できていません
+    </p>
+  )
+}
+
+/** A4のプレビューを全画面で見せる（小さい画面でも原寸で確認できるように） */
+function PreviewModal({
+  onClose,
+  children,
+}: {
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  useDialogDismiss(onClose)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-black/70 print:hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-label="計画書のプレビュー"
+    >
+      <div className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-3">
+        <p className="text-sm font-bold text-white">プレビュー</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="pressable rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-sm hover:bg-white/30"
+        >
+          閉じる
+        </button>
+      </div>
+      {/* 横にも縦にもスクロールできる。全画面なので原寸で読める */}
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
+        <div className="space-y-6">{children}</div>
+      </div>
+    </div>
+  )
+}
+
 function FormBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3 rounded-xl border border-gray-100 p-3">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">{title}</h3>
+      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">{title}</h3>
       {children}
     </div>
   )
@@ -834,9 +1094,10 @@ function FormBlock({ title, children }: { title: string; children: React.ReactNo
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
+    <label className="block">
+      {/* label で囲むことで、ラベル文字をタップしても入力欄に移動できる */}
+      <span className="mb-1 block text-xs font-medium text-gray-600">{label}</span>
       {children}
-    </div>
+    </label>
   )
 }

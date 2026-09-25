@@ -19,6 +19,8 @@ function isoDateAfterDays(days: number) {
   return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)
 }
 
+export const metadata = { title: 'ホーム' }
+
 export default async function HomePage() {
   const supabase = await createClient()
   const {
@@ -245,12 +247,12 @@ export default async function HomePage() {
           <p className="mb-2 text-sm font-bold text-amber-800">
             ✅ やること（{todos.length}）
           </p>
-          <ul className="space-y-1.5">
+          <ul className="reveal-stagger space-y-1.5">
             {todos.map((todo) => (
               <li key={todo.key}>
                 <Link
                   href={todo.href}
-                  className="flex items-center gap-2.5 rounded-lg bg-white/70 px-3 py-2 text-sm text-amber-900 transition hover:bg-white"
+                  className="pressable flex items-center gap-2.5 rounded-lg bg-white/70 px-3 py-2 text-sm text-amber-900 hover:bg-white"
                 >
                   <span aria-hidden className="flex-shrink-0">
                     {todo.icon}
@@ -271,7 +273,7 @@ export default async function HomePage() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold text-gray-800">自分のグループ</h2>
           {myGroups.length > 0 && (
-            <span className="text-sm text-gray-400">{myGroups.length}件</span>
+            <span className="text-sm text-gray-500">{myGroups.length}件</span>
           )}
         </div>
 
@@ -282,12 +284,12 @@ export default async function HomePage() {
             <p className="text-sm text-gray-500">
               グループを開くと、計画の作成・参加や計画書づくりができます。
             </p>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="reveal-stagger grid gap-4 sm:grid-cols-2">
               {myGroups.map((entry) => (
                 <Link
                   key={entry.group!.id}
                   href={`/groups/${entry.group!.id}`}
-                  className="group overflow-hidden rounded-2xl bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg active:scale-[0.98]"
+                  className="pressable group overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-md"
                 >
                   <div className="flex h-32 items-center justify-center overflow-hidden bg-gray-100">
                     {entry.group!.image_url ? (
@@ -296,10 +298,11 @@ export default async function HomePage() {
                         alt=""
                         width={400}
                         height={128}
-                        className="h-full w-full object-cover transition group-hover:scale-105"
+                        sizes="(min-width: 640px) 320px, 100vw"
+                        className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-5xl text-gray-300">⛺</span>
+                      <span className="text-5xl text-gray-400">⛺</span>
                     )}
                   </div>
                   <div className="flex items-center justify-between gap-2 px-4 py-3">
@@ -307,9 +310,9 @@ export default async function HomePage() {
                       <p className="truncate text-base font-bold text-gray-800 group-hover:text-green-700">
                         {entry.group!.name}
                       </p>
-                      <p className="text-xs text-gray-400">{entry.position}</p>
+                      <p className="text-xs text-gray-500">{entry.position}</p>
                     </div>
-                    <span className="flex-shrink-0 text-xl text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-green-500">
+                    <span className="flex-shrink-0 transform-gpu text-xl text-gray-400 transition-[color,transform] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5 group-hover:text-green-500">
                       →
                     </span>
                   </div>
@@ -320,7 +323,7 @@ export default async function HomePage() {
             {/* グループを追加する大きなボタン */}
             <Link
               href="/groups"
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-green-300 bg-white py-5 text-base font-bold text-green-700 transition hover:border-green-500 hover:bg-green-50 active:scale-[0.99]"
+              className="pressable flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-green-300 bg-white py-5 text-base font-bold text-green-700 hover:border-green-500 hover:bg-green-50"
             >
               ＋ グループに参加 / 新しく作る
             </Link>
@@ -356,7 +359,7 @@ function UpcomingList({
   return (
     <section className="animate-fade-in-up space-y-3">
       <h2 className="text-base font-bold text-gray-800">今後の予定</h2>
-      <div className="space-y-3">
+      <div className="reveal-stagger space-y-3">
         {items.map((item) => (
           <UpcomingCard
             key={item.id}
@@ -389,7 +392,7 @@ function UpcomingCard({
     return (
       <Link
         href={href}
-        className="group relative block overflow-hidden rounded-2xl bg-gradient-to-br from-green-600 to-emerald-500 p-5 text-white shadow-sm transition hover:shadow-lg active:scale-[0.99]"
+        className="pressable group relative block overflow-hidden rounded-2xl bg-gradient-to-br from-green-600 to-emerald-500 p-5 text-white shadow-sm hover:shadow-md"
       >
         <HeroSilhouette />
         <div className="relative z-10">
@@ -425,14 +428,14 @@ function UpcomingCard({
   return (
     <Link
       href={href}
-      className="group flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.03] transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
+      className="pressable group flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.03] hover:shadow-md"
     >
       <div className="min-w-0">
         <div className="mb-1 flex items-center gap-2">
           <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
             募集中
           </span>
-          {groupName && <span className="truncate text-xs text-gray-400">{groupName}</span>}
+          {groupName && <span className="truncate text-xs text-gray-500">{groupName}</span>}
         </div>
         <p className="truncate text-sm font-bold text-gray-800 group-hover:text-green-700">
           {item.title}
@@ -443,7 +446,7 @@ function UpcomingCard({
         {item.recruitment && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {isClosed ? (
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
                 締め切り済み
               </span>
             ) : (
@@ -503,7 +506,7 @@ function WelcomeStrip() {
       </div>
       <Link
         href="/help"
-        className="relative z-10 inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-xl bg-white/95 px-5 py-2.5 text-sm font-bold text-green-700 shadow-sm transition hover:bg-white active:scale-[0.98]"
+        className="pressable relative z-10 inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-xl bg-white/95 px-5 py-2.5 text-sm font-bold text-green-700 shadow-sm hover:bg-white"
       >
         使い方ガイドを見る →
       </Link>
@@ -537,7 +540,7 @@ function EmptyGroups() {
       </p>
       <Link
         href="/groups"
-        className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-8 py-4 text-base font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.98]"
+        className="pressable mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-8 py-4 text-base font-bold text-white shadow-sm hover:bg-green-700"
       >
         グループに参加・作成する
       </Link>

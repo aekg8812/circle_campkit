@@ -9,14 +9,17 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* 欧文と数字は Geist、日本語は各OSの標準フォントに任せる。
+     Geist は欧文のみのため、日本語の指定を省くと端末ごとに見え方が変わる。 */
+  --font-sans: var(--font-geist-sans), "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 
 input,
@@ -49,10 +52,12 @@ body {
   overflow-wrap: break-word;
 }
 
+/* プレースホルダは薄すぎると屋外で読めないため、
+   本文と同じ基準（コントラスト比 4.5:1 以上）を満たす濃さにする */
 input::placeholder,
 textarea::placeholder {
-  color: #9ca3af;
-  -webkit-text-fill-color: #9ca3af;
+  color: #6b7280;
+  -webkit-text-fill-color: #6b7280;
   opacity: 1;
 }
 
@@ -71,21 +76,45 @@ input:-webkit-autofill:focus {
   transition: background-color 9999s ease-in-out 0s;
 }
 
-/* ふわっと表示するアニメーション（ホーム画面などで使用） */
+/* ============================================================
+   モーション設計
+   - イージングは cubic-bezier(0.16, 1, 0.3, 1)（摩擦を感じる減速）に統一。
+     標準の ease / linear は機械的に見えるため使わない。
+   - 動かすのは opacity と transform だけ。translate3d で合成レイヤーに載せ、
+     レイアウトの再計算を起こさない。
+   ============================================================ */
+
+/* 出現アニメーション（ふわっと浮かび上がる） */
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translate3d(0, 16px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.5s ease-out both;
+  animation: fade-in-up 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
 }
+
+/* 子要素を少しずつ遅らせて出す（スタガー表示）。
+   要素数が増えても待ち時間が伸びすぎないよう、8番目で頭打ちにする。 */
+.reveal-stagger > * {
+  animation: fade-in-up 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 420ms;
+  will-change: opacity, transform;
+}
+.reveal-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.reveal-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.reveal-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.reveal-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.reveal-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.reveal-stagger > *:nth-child(6) { animation-delay: 300ms; }
+.reveal-stagger > *:nth-child(7) { animation-delay: 360ms; }
 
 /* トースト通知の出現アニメーション */
 @keyframes toast-in {
@@ -100,7 +129,7 @@ input:-webkit-autofill:focus {
 }
 
 .animate-toast-in {
-  animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: toast-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* アプリ全体の背景。単なるグレタではなく、ごく淡い緑がかった
@@ -144,7 +173,9 @@ button:focus-visible {
   color: #ffffff;
   background-color: #16a34a;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .btn-primary:hover {
   background-color: #15803d;
@@ -171,7 +202,10 @@ button:focus-visible {
   color: #374151;
   background-color: #ffffff;
   border: 1px solid #e5e7eb;
-  transition: all 0.15s ease;
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .btn-secondary:hover {
   border-color: #86efac;
@@ -180,6 +214,30 @@ button:focus-visible {
 }
 .btn-secondary:active {
   transform: scale(0.98);
+}
+
+/* 色・影・透明度・変形だけを、統一したカーブで滑らかに変える。
+   Tailwind の素の transition は対象が広く、カーブも標準のままなので使わない。 */
+.transition-ui {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 触れたときの手ごたえ。
+   スマホでは hover がほぼ効かないため、指で感じるのは active の方。
+   拡大はせず、わずかに沈ませる＋少し透かすことで押し込み感を出す。 */
+.pressable {
+  transition-property: opacity, transform, background-color, border-color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateZ(0);
+}
+.pressable:hover {
+  opacity: 0.9;
+}
+.pressable:active {
+  transform: scale(0.98) translateZ(0);
 }
 
 /* 白いカード（うっすら枠線＋やわらかい影）。背景シルエットの上でも締まって見える */
@@ -193,8 +251,16 @@ button:focus-visible {
 /* 動きを減らす設定のユーザーにはアニメーションを抑制（アクセシビリティ） */
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
+  .reveal-stagger > *,
   .animate-toast-in {
     animation: none;
+  }
+  .pressable,
+  .transition-ui {
+    transition-duration: 0ms;
+  }
+  .pressable:active {
+    transform: none;
   }
   * {
     scroll-behavior: auto;

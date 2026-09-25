@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'ヘルプ・使い方ガイド | CampKit',
+  title: 'ヘルプ・使い方ガイド',
 }
 
 // はじめての人向けのヘルプページ。
@@ -150,7 +150,7 @@ export default function HelpPage() {
             {phases.map((phase, index) => (
               <span key={phase.label} className="flex items-center gap-1.5">
                 <span className={`rounded-full px-2.5 py-0.5 ${phase.color}`}>{phase.label}</span>
-                {index < phases.length - 1 && <span className="text-gray-300">→</span>}
+                {index < phases.length - 1 && <span className="text-gray-400">→</span>}
               </span>
             ))}
           </div>
@@ -164,7 +164,7 @@ export default function HelpPage() {
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-xs text-gray-400">
+          <p className="mt-3 text-xs text-gray-500">
             状態は一方向に進みます（戻せません）。「準備中」「過去」は自動で切り替わります。
           </p>
         </div>
@@ -201,7 +201,7 @@ export default function HelpPage() {
                 {faq.q}
                 <span
                   aria-hidden
-                  className="flex-shrink-0 text-lg text-gray-400 transition group-open:rotate-45"
+                  className="flex-shrink-0 text-lg text-gray-500 transition-ui group-open:rotate-45"
                 >
                   ＋
                 </span>

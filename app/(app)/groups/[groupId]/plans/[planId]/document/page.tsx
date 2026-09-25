@@ -2,6 +2,21 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DocumentClient from './DocumentClient'
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ planId: string }>
+}) {
+  const { planId } = await params
+  const supabase = await createClient()
+  const { data: plan } = await supabase
+    .from('plans')
+    .select('title')
+    .eq('id', planId)
+    .maybeSingle()
+  return { title: plan?.title ? `提出書類 — ${plan.title}` : '提出書類' }
+}
+
 export default async function PlanDocumentPage({
   params,
 }: {
@@ -31,7 +46,7 @@ export default async function PlanDocumentPage({
       .single(),
     supabase
       .from('groups')
-      .select('id, name')
+      .select('id, name, document_template')
       .eq('id', groupId)
       .single(),
     supabase
@@ -156,6 +171,7 @@ export default async function PlanDocumentPage({
       previousDocument={previousDocument}
       creatorProfile={creatorProfile}
       leaderProfile={leaderProfile}
+      documentTemplate={group.document_template ?? null}
     />
   )
 }

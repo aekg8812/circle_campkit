@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import CarsClient from './CarsClient'
 
+export const metadata = { title: '車の登録' }
+
 export default async function CarsPage() {
   const supabase = await createClient()
   const {

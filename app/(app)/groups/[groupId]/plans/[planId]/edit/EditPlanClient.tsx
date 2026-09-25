@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Group = {
   id: string
@@ -50,7 +51,7 @@ const schema = z
 type FormValues = z.infer<typeof schema>
 
 const inputClass =
-  'w-full border border-gray-300 rounded-lg bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500'
+  'w-full border border-gray-300 rounded-lg bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500'
 
 export default function EditPlanClient({ group, plan }: Props) {
   const router = useRouter()
@@ -93,7 +94,7 @@ export default function EditPlanClient({ group, plan }: Props) {
       .eq('id', plan.id)
 
     if (error) {
-      setServerError('計画の更新に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '計画の更新できませんでした。'))
       return
     }
 
@@ -111,7 +112,7 @@ export default function EditPlanClient({ group, plan }: Props) {
           ← 戻る
         </Link>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             {group.name}
           </p>
           <h1 className="text-xl font-bold text-gray-800">基本情報を編集</h1>
@@ -191,8 +192,11 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
-      {children}
+      {/* label で囲むことで、ラベル文字をタップしても入力欄に移動できる */}
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-gray-700">{label}</span>
+        {children}
+      </label>
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   )

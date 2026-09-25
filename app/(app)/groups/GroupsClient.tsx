@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -10,6 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import PasswordInput from '@/components/PasswordInput'
 import { EmptyState } from '@/components/EmptyState'
+import { useDialogDismiss } from '@/components/useDialogDismiss'
 
 type Group = {
   id: string
@@ -53,11 +54,13 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
     reset()
   }
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setJoiningGroup(null)
     setJoinError(null)
     reset()
-  }
+  }, [reset])
+
+  useDialogDismiss(closeModal, joiningGroup != null)
 
   const onJoin = async (data: JoinForm) => {
     if (!joiningGroup) return
@@ -97,7 +100,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       <div>
         <Link
           href="/groups/new"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.99]"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition-ui hover:bg-green-700 active:scale-[0.99]"
         >
           ＋ 新しいグループを作成
         </Link>
@@ -108,7 +111,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
 
       {/* 参加中のグループ */}
       <section>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
           参加中のグループ
         </h2>
         {myGroups.length === 0 ? (
@@ -118,12 +121,12 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
             description="下の検索から参加するか、新しいグループを作りましょう。"
           />
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="reveal-stagger grid grid-cols-2 gap-3">
             {myGroups.map((g) => (
               <Link
                 key={g.id}
                 href={`/groups/${g.id}`}
-                className="bg-white rounded-2xl shadow-sm p-3 hover:shadow-md transition"
+                className="pressable rounded-2xl bg-white p-3 shadow-sm hover:shadow-md"
               >
                 <GroupCard group={g} />
               </Link>
@@ -133,7 +136,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       </section>
 
       <section>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
           グループに参加する
         </h2>
         <p className="mb-3 text-xs text-gray-500">
@@ -143,26 +146,26 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
           <input
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
             placeholder="グループ名で検索"
           />
 
           {!normalizedSearch ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-500">
               グループ名を入力して検索してください
             </p>
           ) : filteredGroups.length === 0 ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-500">
               該当するグループはありません
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="reveal-stagger grid grid-cols-1 gap-3 sm:grid-cols-2">
               {filteredGroups.map((g) => (
                 <div key={g.id} className="rounded-2xl border border-gray-100 bg-white p-3">
                   <GroupCard group={g} />
                   <button
                     onClick={() => openJoinModal(g)}
-                    className="mt-2 w-full rounded-lg bg-green-50 py-1.5 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+                    className="pressable mt-2 w-full rounded-lg bg-green-50 py-2 text-xs font-semibold text-green-700 hover:bg-green-100"
                   >
                     パスワードを入力して参加
                   </button>
@@ -176,8 +179,11 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       {/* 参加モーダル */}
       {joiningGroup && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
           onClick={closeModal}
+          role="dialog"
+          aria-modal="true"
+          aria-label="グループに参加"
         >
           <div
             className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4"
@@ -200,6 +206,8 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
               <div>
                 <PasswordInput
                   {...register('password')}
+                  id="group-join-password"
+                  autoComplete="off"
                   placeholder="パスワード"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   autoFocus
@@ -214,14 +222,14 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50 text-sm"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
                 >
                   {isSubmitting ? '参加中...' : '参加する'}
                 </button>
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition text-sm"
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition-ui text-sm"
                 >
                   キャンセル
                 </button>
@@ -244,10 +252,11 @@ function GroupCard({ group }: { group: Group }) {
             alt={group.name}
             width={200}
             height={96}
+            sizes="(min-width: 640px) 320px, 50vw"
             className="object-cover w-full h-full"
           />
         ) : (
-          <span className="text-3xl text-gray-300">&#x26FA;</span>
+          <span className="text-3xl text-gray-400">&#x26FA;</span>
         )}
       </div>
       <p className="font-semibold text-sm text-gray-800 truncate">{group.name}</p>

@@ -5,7 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useState, useRef } from 'react'
+import { useConfirm } from '@/components/ConfirmDialog'
 import Image from 'next/image'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const CATEGORIES = ['テント', '寝袋', '調理', 'テーブル・チェア', '照明', 'その他']
 
@@ -35,6 +37,7 @@ type Props = {
 
 export default function GearClient({ initialGear, userId }: Props) {
   const supabase = createClient()
+  const confirm = useConfirm()
   const [gearList, setGearList] = useState<Gear[]>(initialGear)
   const [editing, setEditing] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -87,7 +90,7 @@ export default function GearClient({ initialGear, userId }: Props) {
       .from('gear')
       .upload(path, pendingPhoto, { upsert: true })
     if (error) {
-      setServerError('写真のアップロードに失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '写真のアップロードできませんでした。'))
       return null
     }
     const { data } = supabase.storage.from('gear').getPublicUrl(path)
@@ -107,7 +110,7 @@ export default function GearClient({ initialGear, userId }: Props) {
         .eq('id', editing)
         .select()
         .single()
-      if (error) { setServerError(error.message); return }
+      if (error) { setServerError(toUserMessage(error, '道具の情報を保存できませんでした。')); return }
       setGearList((prev) => prev.map((g) => (g.id === editing ? updated : g)))
     } else {
       const { data: created, error } = await supabase
@@ -115,7 +118,7 @@ export default function GearClient({ initialGear, userId }: Props) {
         .insert({ ...data, owner_id: userId })
         .select()
         .single()
-      if (error) { setServerError(error.message); return }
+      if (error) { setServerError(toUserMessage(error, '道具の情報を保存できませんでした。')); return }
       if (pendingPhoto) {
         const photoUrl = await uploadPhoto(created.id)
         if (!photoUrl) return
@@ -131,9 +134,17 @@ export default function GearClient({ initialGear, userId }: Props) {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('この道具を削除しますか？')) return
+    if (
+      !(await confirm({
+        title: 'この道具を削除しますか？',
+        confirmLabel: '削除する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     const { error } = await supabase.from('gear').delete().eq('id', id)
-    if (error) { setServerError(error.message); return }
+    if (error) { setServerError(toUserMessage(error, '道具の情報を保存できませんでした。')); return }
     setGearList((prev) => prev.filter((g) => g.id !== id))
   }
 
@@ -145,7 +156,7 @@ export default function GearClient({ initialGear, userId }: Props) {
 
       <button
         onClick={openAdd}
-        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition"
+        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-ui"
       >
         ＋ 道具を追加
       </button>
@@ -183,32 +194,32 @@ export default function GearClient({ initialGear, userId }: Props) {
 
             {/* 写真アップロード */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">写真</label>
+              <label htmlFor="gear-photo" className="block text-sm font-medium text-gray-700 mb-1">写真</label>
               <div
-                className="w-full h-28 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-green-400 transition overflow-hidden"
+                className="w-full h-28 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-green-400 transition-ui overflow-hidden"
                 onClick={() => fileInputRef.current?.click()}
               >
                 {previewUrl ? (
                   <Image src={previewUrl} alt="プレビュー" width={200} height={112} className="object-contain h-full" />
                 ) : (
-                  <span className="text-sm text-gray-400">クリックして写真を選択</span>
+                  <span className="text-sm text-gray-500">クリックして写真を選択</span>
                 )}
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <input ref={fileInputRef} id="gear-photo" type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
             </div>
 
             <div className="flex gap-2 pt-1">
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50 text-sm"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
               >
                 {isSubmitting ? '保存中...' : '保存'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition text-sm"
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition-ui text-sm"
               >
                 キャンセル
               </button>
@@ -218,7 +229,7 @@ export default function GearClient({ initialGear, userId }: Props) {
       )}
 
       {gearList.length === 0 ? (
-        <p className="text-center text-gray-400 py-10 text-sm">登録された道具はありません</p>
+        <p className="text-center text-gray-500 py-10 text-sm">登録された道具はありません</p>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {gearList.map((g) => (
@@ -230,16 +241,17 @@ export default function GearClient({ initialGear, userId }: Props) {
                     alt={g.name}
                     width={200}
                     height={112}
+                    sizes="50vw"
                     className="object-cover w-full h-full"
                   />
                 </div>
               ) : (
-                <div className="w-full h-28 bg-gray-100 rounded-lg mb-2 flex items-center justify-center text-3xl text-gray-300">
+                <div className="w-full h-28 bg-gray-100 rounded-lg mb-2 flex items-center justify-center text-3xl text-gray-400">
                   🏕
                 </div>
               )}
               <p className="font-semibold text-sm text-gray-800 truncate">{g.name}</p>
-              {g.category && <p className="text-xs text-gray-400">{g.category}</p>}
+              {g.category && <p className="text-xs text-gray-500">{g.category}</p>}
               <p className="text-xs text-gray-500 mt-1">
                 {g.quantity != null ? `${g.quantity}個` : ''}
                 {g.capacity != null ? ` ／ ${g.capacity}人用` : ''}
@@ -275,9 +287,12 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {/* label で囲むことで、ラベル文字をタップしても入力欄に移動できる */}
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-gray-700">{label}</span>
+        {children}
+      </label>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   )
 }

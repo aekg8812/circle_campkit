@@ -4,6 +4,8 @@ import Link from 'next/link'
 import ProfileTabs from './ProfileTabs'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
 
+export const metadata = { title: 'プロフィール' }
+
 export default async function ProfilePage({
   searchParams,
 }: {
@@ -42,7 +44,7 @@ export default async function ProfilePage({
         <h1 className="text-xl font-bold text-gray-800">プロフィール</h1>
         <Link
           href="/help"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700"
         >
           <span aria-hidden>❓</span>
           ヘルプ・使い方

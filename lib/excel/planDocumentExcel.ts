@@ -89,33 +89,28 @@ export async function generatePlanDocumentExcel(
   addPlain('記', 'center')
   sheet.addRow([])
 
-  // 記の表
-  const scheduleText = data.scheduleDays
-    .map((day) => [day.label, ...day.lines].join('\n'))
-    .join('\n\n')
+  // 記の表。様式（グループが決めた行の並び）に沿って描く
+  for (const documentRow of data.rows) {
+    let value = ''
+    if (documentRow.kind === 'schedule') {
+      value = documentRow.days
+        .map((day) => [day.label, ...day.lines].join('\n'))
+        .join('\n\n')
+    } else if (documentRow.kind === 'lines') {
+      value = documentRow.values.join('\n')
+    } else {
+      value = documentRow.value
+    }
 
-  const bodyRows: [string, string][] = [
-    ['行事名', data.title],
-    ['日時', data.dateRangeLabel],
-    ['場所', data.place],
-    ['日程（詳細に）', scheduleText],
-    ['宿泊所', data.lodgingLines.join('\n')],
-    ['移動手段', data.transportLabel],
-    ['参加人数', data.participantCountLabel],
-    ['周辺の病院等', data.hospitalLabel],
-    ['備考', data.notes],
-  ]
-
-  for (const [label, value] of bodyRows) {
-    const row = sheet.addRow([label, value])
+    const row = sheet.addRow([documentRow.label, value])
     sheet.mergeCells(`B${row.number}:C${row.number}`)
     styleHeaderCell(row.getCell(1))
     styleValueCell(row.getCell(2))
 
-    // 行程・備考は行を高くして読みやすくする
-    if (label === '日程（詳細に）') {
-      row.height = Math.max(60, scheduleText.split('\n').length * 14)
-    } else if (label === '備考' || label === '宿泊所') {
+    // 複数行になる項目は行を高くして読みやすくする
+    if (documentRow.kind === 'schedule') {
+      row.height = Math.max(60, value.split('\n').length * 14)
+    } else if (value.includes('\n') || documentRow.key === 'notes') {
       row.height = 34
     }
   }

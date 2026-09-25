@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
@@ -12,6 +12,8 @@ import { formatJpDate, formatJpDateRange, formatJpDateTime } from '@/lib/formatD
 import { pickMeetingItem } from '@/lib/meetingPoint'
 import MeetingCard from '@/components/MeetingCard'
 import FirstTimeNote from '@/components/FirstTimeNote'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { useDialogDismiss } from '@/components/useDialogDismiss'
 import { getMissingDocumentFields, type ProfileLike } from '@/lib/profileCompleteness'
 import { useToast } from '@/components/Toast'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -21,6 +23,7 @@ import {
   isRecruitmentClosed,
   type PlanPhase,
 } from '@/lib/recruitmentStatus'
+import { toUserMessage } from '@/lib/errorMessage'
 
 type Group = {
   id: string
@@ -143,7 +146,7 @@ const recruitmentSchema = z.object({
 })
 
 const inputClass =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500'
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500'
 
 const timeOptions = createHalfHourTimeOptions()
 const scheduleLabels = ['集合', '出発', '到着', '解散', '休憩', '買い出し']
@@ -165,10 +168,13 @@ export default function PlanDetailClient({
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
+  const confirm = useConfirm()
   const isCreator = plan.creator_id === currentUserId
   const missingProfileFields = getMissingDocumentFields(currentUserProfile)
   // 参加直後に持ち物・車を登録してもらうモーダル
   const [showPrepModal, setShowPrepModal] = useState(false)
+  const closePrepModal = useCallback(() => setShowPrepModal(false), [])
+  useDialogDismiss(closePrepModal, showPrepModal)
   const [selectedGearIds, setSelectedGearIds] = useState<string[]>([])
   const [selectedCarIds, setSelectedCarIds] = useState<string[]>([])
   const [prepSaving, setPrepSaving] = useState(false)
@@ -250,7 +256,7 @@ export default function PlanDetailClient({
       .eq('id', plan.id)
 
     if (error) {
-      setServerError('状態の更新に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '状態の更新できませんでした。'))
       setUpdatingStatus(null)
       return
     }
@@ -272,7 +278,7 @@ export default function PlanDetailClient({
       .eq('id', plan.id)
 
     if (error) {
-      setServerError('交通手段の更新に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '交通手段の更新できませんでした。'))
       setUpdatingTransport(false)
       return
     }
@@ -318,7 +324,7 @@ export default function PlanDetailClient({
     })
 
     if (error) {
-      setServerError('行程の追加に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '行程の追加できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -379,7 +385,7 @@ export default function PlanDetailClient({
       .eq('id', editingScheduleId)
 
     if (error) {
-      setServerError('行程の更新に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '行程の更新できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -451,7 +457,7 @@ export default function PlanDetailClient({
       )
 
     if (error) {
-      setServerError('募集設定の保存に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '募集設定の保存できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -465,9 +471,11 @@ export default function PlanDetailClient({
     if (missingProfileFields.length > 0) {
       const labels = missingProfileFields.map((field) => field.label).join('・')
       if (
-        !confirm(
-          `プロフィールの「${labels}」が未入力です。\nこのまま参加すると計画書の名簿でこれらが空欄になります。参加しますか？`
-        )
+        !(await confirm({
+          title: 'プロフィールに未入力があります',
+          message: `未入力：${labels}\n\nこのまま参加すると、計画書の名簿でこれらが空欄になります。`,
+          confirmLabel: 'このまま参加する',
+        }))
       ) {
         return
       }
@@ -482,7 +490,7 @@ export default function PlanDetailClient({
     })
 
     if (error) {
-      setServerError('参加登録に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '参加登録できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -498,7 +506,16 @@ export default function PlanDetailClient({
 
   const leavePlan = async () => {
     if (!myParticipant) return
-    if (!confirm('この計画の参加をキャンセルしますか？')) return
+    if (
+      !(await confirm({
+        title: 'この計画の参加をキャンセルしますか？',
+        confirmLabel: 'キャンセルする',
+        cancelLabel: 'やめる',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
 
     setServerError(null)
     setSubmitting('participant')
@@ -509,7 +526,7 @@ export default function PlanDetailClient({
       .eq('id', myParticipant.id)
 
     if (error) {
-      setServerError('参加キャンセルに失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '参加キャンセルできませんでした。'))
       setSubmitting(null)
       return
     }
@@ -548,7 +565,7 @@ export default function PlanDetailClient({
     )
 
     if (error) {
-      setServerError('レビューの保存に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, 'レビューの保存できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -560,7 +577,15 @@ export default function PlanDetailClient({
 
   const deleteReview = async () => {
     if (!myReview) return
-    if (!confirm('自分のレビューを削除しますか？')) return
+    if (
+      !(await confirm({
+        title: '自分のレビューを削除しますか？',
+        confirmLabel: '削除する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
 
     setServerError(null)
     setSubmitting('review')
@@ -568,7 +593,7 @@ export default function PlanDetailClient({
     const { error } = await supabase.from('plan_reviews').delete().eq('id', myReview.id)
 
     if (error) {
-      setServerError('レビューの削除に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, 'レビューの削除できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -582,9 +607,11 @@ export default function PlanDetailClient({
   // 募集を締め切る → 自動的に「準備中」フェーズへ進む
   const closeRecruitment = async () => {
     if (
-      !confirm(
-        '募集を締め切りますか？\n締め切ると「準備中」に進み、これ以上の参加はできなくなります。'
-      )
+      !(await confirm({
+        title: '募集を締め切りますか？',
+        message: '締め切ると「準備中」に進み、これ以上の参加はできなくなります。',
+        confirmLabel: '締め切る',
+      }))
     ) {
       return
     }
@@ -604,7 +631,7 @@ export default function PlanDetailClient({
     )
 
     if (error) {
-      setServerError('募集の締め切りに失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '募集の締め切りできませんでした。'))
       setSubmitting(null)
       return
     }
@@ -616,9 +643,12 @@ export default function PlanDetailClient({
 
   const duplicatePlan = async () => {
     if (
-      !confirm(
-        'この計画を複製しますか？\n\n複製した計画は「自分の計画」タブに未公開で追加されます（日程は未設定）。\n続けて日程などを編集できます。'
-      )
+      !(await confirm({
+        title: 'この計画を複製しますか？',
+        message:
+          '複製した計画は「自分の計画」タブに未公開で追加されます（日程は未設定）。\n続けて日程などを編集できます。',
+        confirmLabel: '複製する',
+      }))
     ) {
       return
     }
@@ -643,7 +673,7 @@ export default function PlanDetailClient({
       .single()
 
     if (error || !created) {
-      setServerError('複製に失敗しました: ' + (error?.message ?? ''))
+      setServerError(toUserMessage(error, '複製できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -693,7 +723,7 @@ export default function PlanDetailClient({
     })
 
     if (error) {
-      setServerError('持ち物の追加に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '持ち物の追加できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -745,7 +775,7 @@ export default function PlanDetailClient({
       if (rows.length > 0) {
         const { error } = await supabase.from('preparations').insert(rows)
         if (error) {
-          setServerError('持ち物の登録に失敗しました: ' + error.message)
+          setServerError(toUserMessage(error, '持ち物の登録できませんでした。'))
           setPrepSaving(false)
           return
         }
@@ -762,7 +792,7 @@ export default function PlanDetailClient({
     setServerError(null)
     const { error } = await supabase.from('preparations').delete().eq('id', id)
     if (error) {
-      setServerError('削除に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '削除できませんでした。'))
       return
     }
     refreshAfterMutation()
@@ -770,9 +800,13 @@ export default function PlanDetailClient({
 
   const deletePlan = async () => {
     if (
-      !confirm(
-        'この計画を削除しますか？\n行程・募集・参加者・計画書もすべて削除され、元に戻せません。'
-      )
+      !(await confirm({
+        title: 'この計画を削除しますか？',
+        message:
+          '行程・募集・参加者・提出書類もすべて削除され、元に戻せません。',
+        confirmLabel: '完全に削除する',
+        tone: 'danger',
+      }))
     ) {
       return
     }
@@ -783,7 +817,7 @@ export default function PlanDetailClient({
     const { error } = await supabase.from('plans').delete().eq('id', plan.id)
 
     if (error) {
-      setServerError('計画の削除に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '計画の削除できませんでした。'))
       setSubmitting(null)
       return
     }
@@ -796,12 +830,20 @@ export default function PlanDetailClient({
     table: 'schedule_items',
     id: string
   ) => {
-    if (!confirm('削除しますか？')) return
+    if (
+      !(await confirm({
+        title: 'この行程を削除しますか？',
+        confirmLabel: '削除する',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     setServerError(null)
 
     const { error } = await supabase.from(table).delete().eq('id', id)
     if (error) {
-      setServerError('削除に失敗しました: ' + error.message)
+      setServerError(toUserMessage(error, '削除できませんでした。'))
       return
     }
     refreshAfterMutation()
@@ -815,7 +857,7 @@ export default function PlanDetailClient({
             ← 戻る
           </Link>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {group.name}
             </p>
             <h1 className="text-xl font-bold text-gray-800">{plan.title}</h1>
@@ -826,14 +868,14 @@ export default function PlanDetailClient({
             type="button"
             onClick={duplicatePlan}
             disabled={submitting === 'duplicate'}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700 disabled:opacity-50"
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700 disabled:opacity-50"
             title="この計画をコピーして、自分の新しい計画（未公開）を作ります"
           >
             {submitting === 'duplicate' ? '複製中...' : '📋 自分の計画に複製'}
           </button>
           <Link
             href={`/groups/${group.id}/plans/${plan.id}/document`}
-            className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100"
+            className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition-ui hover:bg-green-100"
             title="学校に提出する書類（計画書＋参加者名簿）を作成します"
           >
             📄 提出書類をつくる
@@ -845,7 +887,7 @@ export default function PlanDetailClient({
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <StatusBadge status={phase} className="px-3 py-1" />
           {isCreator && (
-            <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
+            <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
               起案者
             </span>
           )}
@@ -884,7 +926,7 @@ export default function PlanDetailClient({
           {isCreator && phase !== 'past' && (
             <Link
               href={`/groups/${group.id}/plans/${plan.id}/edit`}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:text-green-700"
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700"
             >
               ✏️ 基本情報を編集
             </Link>
@@ -907,10 +949,11 @@ export default function PlanDetailClient({
 
         {isCreator && (
           <div className="mt-6">
-            <label className="mb-2 block text-sm font-bold text-gray-700">
+            <label htmlFor="plan-default-transport" className="mb-2 block text-sm font-bold text-gray-700">
               全体の交通手段
             </label>
             <select
+              id="plan-default-transport"
               value={plan.default_transport ?? ''}
               onChange={(event) => updateDefaultTransport(event.target.value)}
               disabled={updatingTransport}
@@ -972,6 +1015,7 @@ export default function PlanDetailClient({
       <RecruitmentSection
         recruitment={recruitment}
         participants={participants}
+        currentUserId={currentUserId}
         isCreator={isCreator}
         isParticipating={Boolean(myParticipant)}
         isCreatorParticipant={Boolean(myParticipant && isCreator)}
@@ -990,6 +1034,7 @@ export default function PlanDetailClient({
       {/* 持ち物・準備は、募集を開始してから（募集中・準備中）だけ表示する */}
       {(phase === 'recruiting' || phase === 'in_progress') && (
         <PreparationSection
+          planId={plan.id}
           preparations={preparations}
           currentUserId={currentUserId}
           isParticipant={Boolean(myParticipant)}
@@ -1017,7 +1062,7 @@ export default function PlanDetailClient({
             type="button"
             onClick={deletePlan}
             disabled={submitting === 'delete-plan'}
-            className="mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+            className="mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
           >
             {submitting === 'delete-plan' ? '削除中...' : 'この計画を削除'}
           </button>
@@ -1189,11 +1234,11 @@ function StatusManager({
               募集中
             </span>
             <span className="text-amber-300">→</span>
-            <span className="rounded-full bg-white px-2 py-0.5 text-gray-400 ring-1 ring-gray-200">
+            <span className="rounded-full bg-white px-2 py-0.5 text-gray-500 ring-1 ring-gray-200">
               準備中
             </span>
             <span className="text-amber-300">→</span>
-            <span className="rounded-full bg-white px-2 py-0.5 text-gray-400 ring-1 ring-gray-200">
+            <span className="rounded-full bg-white px-2 py-0.5 text-gray-500 ring-1 ring-gray-200">
               過去
             </span>
           </div>
@@ -1281,6 +1326,7 @@ function StatusManager({
 function RecruitmentSection({
   recruitment,
   participants,
+  currentUserId,
   isCreator,
   isParticipating,
   isCreatorParticipant,
@@ -1297,6 +1343,7 @@ function RecruitmentSection({
 }: {
   recruitment: Recruitment | null
   participants: Participant[]
+  currentUserId: string
   isCreator: boolean
   isParticipating: boolean
   isCreatorParticipant: boolean
@@ -1351,7 +1398,7 @@ function RecruitmentSection({
         <div>
           <h3 className="mb-3 text-sm font-bold text-gray-700">参加者</h3>
           {participants.length === 0 ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-sm text-gray-500">
               参加者はまだいません
             </p>
           ) : (
@@ -1361,13 +1408,16 @@ function RecruitmentSection({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-800">
                       {participant.profiles?.name ?? '名前未設定'}
+                      {participant.user_id === currentUserId && (
+                        <span className="ml-1 text-xs font-normal text-green-700">（あなた）</span>
+                      )}
                     </p>
+                    {/* 参加日時は誰も見ないうえ、人数ぶん並ぶと数字で画面が埋まるので出さない */}
                     <p className="text-xs text-gray-500">
                       {participant.position}
                       {participant.profiles?.grade != null
                         ? ` / ${participant.profiles.grade}年生`
                         : ''}
-                      {participant.joined_at ? ` / ${formatJpDateTime(participant.joined_at)}` : ''}
                     </p>
                   </div>
                 </div>
@@ -1414,8 +1464,9 @@ function RecruitmentSection({
           <form onSubmit={onSave} className="space-y-3 border-t border-gray-100 pt-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">募集方式</label>
+                <label htmlFor="recruitment-type" className="mb-1 block text-xs font-medium text-gray-600">募集方式</label>
                 <select
+                  id="recruitment-type"
                   value={form.type}
                   onChange={(event) => {
                     const type = event.target.value
@@ -1434,8 +1485,9 @@ function RecruitmentSection({
               </div>
               {form.type === 'first_come' && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">定員（先着人数）</label>
+                  <label htmlFor="recruitment-capacity" className="mb-1 block text-xs font-medium text-gray-600">定員（先着人数）</label>
                   <input
+                    id="recruitment-capacity"
                     type="number"
                     min={1}
                     value={form.capacity}
@@ -1447,8 +1499,9 @@ function RecruitmentSection({
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">締切日時</label>
+              <label htmlFor="recruitment-deadline" className="mb-1 block text-xs font-medium text-gray-600">締切日時</label>
               <input
+                id="recruitment-deadline"
                 type="datetime-local"
                 onClick={openDatePicker}
                 value={form.deadline}
@@ -1481,6 +1534,7 @@ function RecruitmentSection({
 // 持ち物・準備：上に「個人の持ち物」、下に「共同の持ち物（みんなで使う）」を
 // それぞれ独立した欄として表示し、各欄に追加ボタンを置く（見やすさ優先）。
 function PreparationSection({
+  planId,
   preparations,
   currentUserId,
   isParticipant,
@@ -1496,6 +1550,7 @@ function PreparationSection({
   onAddItem,
   onDelete,
 }: {
+  planId: string
   preparations: Preparation[]
   currentUserId: string
   isParticipant: boolean
@@ -1511,6 +1566,35 @@ function PreparationSection({
   onAddItem: (body: string, type: 'gear' | 'car' | 'shared') => void
   onDelete: (id: string) => void
 }) {
+  // AIによる持ち物の点検
+  const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
+  const [checkResult, setCheckResult] = useState<{
+    summary: string
+    findings: { severity: 'warning' | 'info'; title: string; detail: string }[]
+  } | null>(null)
+
+  const runGearCheck = async () => {
+    setCheckError(null)
+    setChecking(true)
+    try {
+      const response = await fetch('/api/ai/gear-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setCheckError(result.error ?? '点検に失敗しました')
+      } else {
+        setCheckResult(result)
+      }
+    } catch (error) {
+      setCheckError(error instanceof Error ? error.message : '点検に失敗しました')
+    }
+    setChecking(false)
+  }
+
   // すでに自分が登録した内容は、プロフィールからのクイック追加の候補から外す
   const myBodies = new Set(
     preparations.filter((p) => p.user_id === currentUserId).map((p) => p.body ?? '')
@@ -1534,7 +1618,7 @@ function PreparationSection({
             className="h-full w-full object-cover"
           />
         ) : (
-          <span className="text-xs text-gray-400">👤</span>
+          <span className="text-xs text-gray-500">👤</span>
         )}
       </div>
       <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
@@ -1545,7 +1629,7 @@ function PreparationSection({
         )}
         {prep.body}
       </span>
-      <span className="flex-shrink-0 text-xs text-gray-400">
+      <span className="flex-shrink-0 text-xs text-gray-500">
         {prep.profiles?.name ?? '名前未設定'}
       </span>
       {prep.user_id === currentUserId && (
@@ -1564,12 +1648,61 @@ function PreparationSection({
     <section className="rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.03]">
       <SectionHeader title="持ち物・準備" />
 
+      {/* 足りない物は誰も気付けないので、AIに点検させる */}
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={runGearCheck}
+          disabled={checking}
+          className="pressable rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:border-green-400 disabled:opacity-50"
+        >
+          {checking ? '点検中...' : '✨ 足りない物をチェック'}
+        </button>
+
+        {checkError && (
+          <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{checkError}</p>
+        )}
+
+        {checkResult && (
+          <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+            <p className="text-xs font-bold text-gray-700">{checkResult.summary}</p>
+            {checkResult.findings.length === 0 ? (
+              <p className="mt-2 text-xs text-gray-500">
+                特に足りない物は見つかりませんでした。
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {checkResult.findings.map((finding, index) => (
+                  <li
+                    key={index}
+                    className={`rounded-lg px-3 py-2 text-xs ${
+                      finding.severity === 'warning'
+                        ? 'bg-amber-50 text-amber-900'
+                        : 'bg-gray-50 text-gray-600'
+                    }`}
+                  >
+                    <p className="font-bold">
+                      {finding.severity === 'warning' ? '⚠️ ' : 'ℹ️ '}
+                      {finding.title}
+                    </p>
+                    <p className="mt-0.5 leading-5">{finding.detail}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-gray-500">
+              AIの提案です。最終的な判断は自分たちで行ってください。
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-6 p-4">
         {/* ───────── 個人の持ち物 ───────── */}
         <div>
           <p className="mb-2 text-sm font-bold text-gray-700">🎒 個人の持ち物</p>
           {personalItems.length === 0 ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">
               まだありません
             </p>
           ) : (
@@ -1589,7 +1722,7 @@ function PreparationSection({
                       type="button"
                       disabled={submitting}
                       onClick={() => onAddItem(gear.name, 'gear')}
-                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
                     >
                       ＋ 🎒 {gear.name}
                     </button>
@@ -1600,7 +1733,7 @@ function PreparationSection({
                       type="button"
                       disabled={submitting}
                       onClick={() => onAddItem(carLabel(car), 'car')}
-                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
                     >
                       ＋ 🚗 {carLabel(car)}
                     </button>
@@ -1630,7 +1763,7 @@ function PreparationSection({
         <div className="border-t border-gray-100 pt-5">
           <p className="mb-2 text-sm font-bold text-gray-700">🤝 共同の持ち物（みんなで使う）</p>
           {sharedItems.length === 0 ? (
-            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-400">
+            <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">
               まだありません
             </p>
           ) : (
@@ -1659,7 +1792,7 @@ function PreparationSection({
         </div>
 
         {!isParticipant && (
-          <p className="text-center text-xs text-gray-400">
+          <p className="text-center text-xs text-gray-500">
             持ち物を登録できるのは、この計画に参加したメンバーだけです。
           </p>
         )}
@@ -1711,7 +1844,7 @@ function ReviewSection({
       <div className="space-y-5 p-4">
         {/* みんなの感想 */}
         {reviews.length === 0 ? (
-          <p className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-400">
+          <p className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
             まだレビューがありません。最初のひとことを書いてみましょう。
           </p>
         ) : (
@@ -1729,7 +1862,7 @@ function ReviewSection({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-sm text-gray-400">👤</span>
+                      <span className="text-sm text-gray-500">👤</span>
                     )}
                   </div>
                   <p className="flex-1 text-sm font-semibold text-gray-800">
@@ -1767,10 +1900,11 @@ function ReviewSection({
               placeholder="活動の感想、良かった点、ヒヤリハットなど"
             />
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
+              <label htmlFor="review-cost" className="mb-1 block text-xs font-medium text-gray-600">
                 一人あたりの費用（円・任意）
               </label>
               <input
+                id="review-cost"
                 type="number"
                 min={0}
                 value={form.cost}
@@ -1783,7 +1917,7 @@ function ReviewSection({
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white transition hover:bg-green-700 active:scale-[0.99] disabled:opacity-50"
+                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white transition-ui hover:bg-green-700 active:scale-[0.99] disabled:opacity-50"
               >
                 {submitting ? '保存中...' : hasMyReview ? '更新する' : '投稿する'}
               </button>
@@ -1792,7 +1926,7 @@ function ReviewSection({
                   type="button"
                   onClick={onDelete}
                   disabled={submitting}
-                  className="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
                 >
                   削除
                 </button>
@@ -1800,7 +1934,7 @@ function ReviewSection({
             </div>
           </form>
         ) : (
-          <p className="border-t border-gray-100 pt-4 text-xs text-gray-400">
+          <p className="border-t border-gray-100 pt-4 text-xs text-gray-500">
             レビューはこの計画に参加したメンバーが書けます。
           </p>
         )}
@@ -1995,7 +2129,7 @@ function ScheduleSection({
                           <button
                             type="button"
                             onClick={onCancelEdit}
-                            className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200"
+                            className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
                           >
                             キャンセル
                           </button>
@@ -2180,14 +2314,21 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <div className="p-8 text-center text-sm text-gray-400">{text}</div>
+  return <div className="p-8 text-center text-sm text-gray-500">{text}</div>
 }
 
 function DetailItem({ label, value }: { label: string; value: string | null | undefined }) {
+  const filled = value != null && value !== ''
   return (
     <div>
-      <dt className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</dt>
-      <dd className="mt-1 text-sm font-semibold text-gray-800">{value || '未設定'}</dd>
+      <dt className="text-xs font-bold uppercase tracking-wider text-gray-500">{label}</dt>
+      {/* 「未設定」が並ぶと壊れて見えるので、空欄は静かなダッシュにする。
+         起案者には見出しの横に編集ボタンがあるので、ここに導線は置かない。 */}
+      <dd
+        className={`mt-1 text-sm font-semibold ${filled ? 'text-gray-800' : 'text-gray-400'}`}
+      >
+        {filled ? value : '—'}
+      </dd>
     </div>
   )
 }

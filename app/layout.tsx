@@ -20,7 +20,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CampKit — アウトドアサークルの計画・計画書づくり",
+  // 各ページが title を返すと「春キャンプ | CampKit」の形になる。
+  // タブ・履歴・LINEで共有したときのプレビュー名を区別するため。
+  title: {
+    default: "CampKit — アウトドアサークルの計画・計画書づくり",
+    template: "%s | CampKit",
+  },
   description:
     "サークルの計画づくり・参加募集から、学校提出用の計画書作成までをまとめて。",
 };
@@ -32,7 +37,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">

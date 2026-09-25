@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import GroupsClient from './GroupsClient'
 
+export const metadata = { title: 'グループに参加・作成' }
+
 export default async function GroupsPage({
   searchParams,
 }: {

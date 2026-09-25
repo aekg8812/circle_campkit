@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useLiff } from '@/components/LiffProvider'
+import { toUserMessage } from '@/lib/errorMessage'
 
 // LINEの認証へ送り出したことを覚えておくための印（タブを閉じれば消える）
 const PENDING_KEY = 'campkit.line-login-pending'
@@ -88,7 +89,7 @@ export default function LineLoginButton() {
         })
 
         if (verifyError) {
-          setError('ログイン処理に失敗しました: ' + verifyError.message)
+          setError(toUserMessage(verifyError, 'ログイン処理できませんでした。'))
           setLoading(false)
           return
         }
@@ -127,7 +128,7 @@ export default function LineLoginButton() {
     <div className="mt-5">
       <div className="mb-4 flex items-center gap-3">
         <span className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs text-gray-400">または</span>
+        <span className="text-xs text-gray-500">または</span>
         <span className="h-px flex-1 bg-gray-200" />
       </div>
 
@@ -139,13 +140,13 @@ export default function LineLoginButton() {
         type="button"
         onClick={() => signInWithLine(true)}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#06C755] py-3 text-sm font-bold text-white transition hover:bg-[#05b34c] active:scale-[0.99] disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#06C755] py-3 text-sm font-bold text-white transition-ui hover:bg-[#05b34c] active:scale-[0.99] disabled:opacity-50"
       >
         <span aria-hidden className="text-base leading-none">💬</span>
         {loading ? 'LINEでログインしています...' : 'LINEでログイン'}
       </button>
 
-      <p className="mt-2 text-center text-xs text-gray-400">
+      <p className="mt-2 text-center text-xs text-gray-500">
         確認メールのやり取りなしでログインできます
       </p>
     </div>

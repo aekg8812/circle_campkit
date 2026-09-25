@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useState } from 'react'
+import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z.object({
   email: z.string().email('有効なメールアドレスを入力してください'),
@@ -34,7 +35,7 @@ export default function ForgotPasswordPage() {
       redirectTo: `${location.origin}/reset-password`,
     })
     if (error) {
-      setServerError(error.message)
+      setServerError(toUserMessage(error, 'メールを送信できませんでした。'))
       return
     }
     setSent(true)
@@ -48,7 +49,7 @@ export default function ForgotPasswordPage() {
           {getValues('email')} 宛に、パスワード再設定用のリンクを送りました。
           メール内のリンクを開いて、新しいパスワードを設定してください。
         </p>
-        <p className="mt-4 text-xs text-gray-400">
+        <p className="mt-4 text-xs text-gray-500">
           メールが届かない場合は、迷惑メールフォルダもご確認ください。
         </p>
         <Link href="/login" className="mt-6 inline-block text-green-600 hover:underline text-sm">
@@ -72,12 +73,15 @@ export default function ForgotPasswordPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-700 mb-1">
             メールアドレス
           </label>
           <input
             {...register('email')}
+            id="forgot-email"
             type="email"
+            autoComplete="email"
+            inputMode="email"
             placeholder="example@kyutech.ac.jp"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
           />

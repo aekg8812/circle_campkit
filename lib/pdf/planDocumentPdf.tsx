@@ -136,39 +136,41 @@ function PlanDocumentPdf({ data }: { data: PlanDocumentData }) {
         <Text style={[styles.center, { marginTop: 8 }]}>記</Text>
 
         <View style={styles.table}>
-          <BodyRow label="行事名" value={data.title} />
-          <BodyRow label="日時" value={data.dateRangeLabel} />
-          <BodyRow label="場所" value={data.place} />
-
-          <View style={styles.row}>
-            <Text style={styles.th}>{'日程\n（詳細に）'}</Text>
-            <View style={{ flex: 1, flexDirection: 'row' }}>
-              {data.scheduleDays.length === 0 ? (
-                <Text style={styles.td}> </Text>
-              ) : (
-                data.scheduleDays.map((day, index) => (
-                  <View
-                    key={day.label}
-                    style={[
-                      styles.scheduleCol,
-                      index === data.scheduleDays.length - 1 ? { borderRight: 0 } : {},
-                    ]}
-                  >
-                    <Text>{day.label}</Text>
-                    {day.lines.map((line, lineIndex) => (
-                      <Text key={lineIndex}>{line}</Text>
-                    ))}
+          {/* 様式（グループが決めた行の並び）に沿って描く */}
+          {data.rows.map((row) => {
+            if (row.kind === 'schedule') {
+              return (
+                <View key={row.key} style={styles.row}>
+                  <Text style={styles.th}>{row.label}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row' }}>
+                    {row.days.length === 0 ? (
+                      <Text style={styles.td}> </Text>
+                    ) : (
+                      row.days.map((day, index) => (
+                        <View
+                          key={day.label}
+                          style={[
+                            styles.scheduleCol,
+                            index === row.days.length - 1 ? { borderRight: 0 } : {},
+                          ]}
+                        >
+                          <Text>{day.label}</Text>
+                          {day.lines.map((line, lineIndex) => (
+                            <Text key={lineIndex}>{line}</Text>
+                          ))}
+                        </View>
+                      ))
+                    )}
                   </View>
-                ))
-              )}
-            </View>
-          </View>
+                </View>
+              )
+            }
 
-          <BodyRow label="宿泊所" value={data.lodgingLines.join('\n')} />
-          <BodyRow label="移動手段" value={data.transportLabel} />
-          <BodyRow label="参加人数" value={data.participantCountLabel} />
-          <BodyRow label="周辺の病院等" value={data.hospitalLabel} />
-          <BodyRow label="備考" value={data.notes} minHeight={40} />
+            const value = row.kind === 'lines' ? row.values.join('\n') : row.value
+            // 備考は書き込む余白が要るので、少し高さを持たせる
+            const minHeight = row.key === 'notes' ? 40 : undefined
+            return <BodyRow key={row.key} label={row.label} value={value} minHeight={minHeight} />
+          })}
         </View>
       </Page>
 

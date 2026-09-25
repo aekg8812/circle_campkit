@@ -16,7 +16,7 @@ export default function LogoutButton() {
   return (
     <button
       onClick={handleLogout}
-      className="text-gray-500 hover:text-red-600 transition text-sm"
+      className="text-sm text-gray-500 transition-colors duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:text-red-600"
     >
       ログアウト
     </button>
