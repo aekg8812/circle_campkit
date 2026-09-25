@@ -1032,6 +1032,7 @@ export default function PlanDetailClient({
       {/* 持ち物・準備は、募集を開始してから（募集中・準備中）だけ表示する */}
       {(phase === 'recruiting' || phase === 'in_progress') && (
         <PreparationSection
+          planId={plan.id}
           preparations={preparations}
           currentUserId={currentUserId}
           isParticipant={Boolean(myParticipant)}
@@ -1526,6 +1527,7 @@ function RecruitmentSection({
 // 持ち物・準備：上に「個人の持ち物」、下に「共同の持ち物（みんなで使う）」を
 // それぞれ独立した欄として表示し、各欄に追加ボタンを置く（見やすさ優先）。
 function PreparationSection({
+  planId,
   preparations,
   currentUserId,
   isParticipant,
@@ -1541,6 +1543,7 @@ function PreparationSection({
   onAddItem,
   onDelete,
 }: {
+  planId: string
   preparations: Preparation[]
   currentUserId: string
   isParticipant: boolean
@@ -1556,6 +1559,35 @@ function PreparationSection({
   onAddItem: (body: string, type: 'gear' | 'car' | 'shared') => void
   onDelete: (id: string) => void
 }) {
+  // AIによる持ち物の点検
+  const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
+  const [checkResult, setCheckResult] = useState<{
+    summary: string
+    findings: { severity: 'warning' | 'info'; title: string; detail: string }[]
+  } | null>(null)
+
+  const runGearCheck = async () => {
+    setCheckError(null)
+    setChecking(true)
+    try {
+      const response = await fetch('/api/ai/gear-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setCheckError(result.error ?? '点検に失敗しました')
+      } else {
+        setCheckResult(result)
+      }
+    } catch (error) {
+      setCheckError(error instanceof Error ? error.message : '点検に失敗しました')
+    }
+    setChecking(false)
+  }
+
   // すでに自分が登録した内容は、プロフィールからのクイック追加の候補から外す
   const myBodies = new Set(
     preparations.filter((p) => p.user_id === currentUserId).map((p) => p.body ?? '')
@@ -1608,6 +1640,55 @@ function PreparationSection({
   return (
     <section className="rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.03]">
       <SectionHeader title="持ち物・準備" />
+
+      {/* 足りない物は誰も気付けないので、AIに点検させる */}
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={runGearCheck}
+          disabled={checking}
+          className="pressable rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:border-green-400 disabled:opacity-50"
+        >
+          {checking ? '点検中...' : '✨ 足りない物をチェック'}
+        </button>
+
+        {checkError && (
+          <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{checkError}</p>
+        )}
+
+        {checkResult && (
+          <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+            <p className="text-xs font-bold text-gray-700">{checkResult.summary}</p>
+            {checkResult.findings.length === 0 ? (
+              <p className="mt-2 text-xs text-gray-500">
+                特に足りない物は見つかりませんでした。
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {checkResult.findings.map((finding, index) => (
+                  <li
+                    key={index}
+                    className={`rounded-lg px-3 py-2 text-xs ${
+                      finding.severity === 'warning'
+                        ? 'bg-amber-50 text-amber-900'
+                        : 'bg-gray-50 text-gray-600'
+                    }`}
+                  >
+                    <p className="font-bold">
+                      {finding.severity === 'warning' ? '⚠️ ' : 'ℹ️ '}
+                      {finding.title}
+                    </p>
+                    <p className="mt-0.5 leading-5">{finding.detail}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-gray-500">
+              AIの提案です。最終的な判断は自分たちで行ってください。
+            </p>
+          </div>
+        )}
+      </div>
 
       <div className="space-y-6 p-4">
         {/* ───────── 個人の持ち物 ───────── */}

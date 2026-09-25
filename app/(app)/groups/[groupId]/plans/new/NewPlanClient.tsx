@@ -65,6 +65,9 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  // AIによる行程表の下書き
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   // 基本情報
   const [basic, setBasic] = useState({
@@ -136,6 +139,76 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
 
     // コピーしたらテンプレート一覧は閉じて、フォームに集中できるようにする
     setShowTemplates(false)
+  }
+
+  // AIに行程表の下書きを作ってもらい、そのままフォームに流し込む。
+  // 保存はせず、あくまで下書きなので、このあと手で直して使う。
+  const generateScheduleWithAi = async () => {
+    setAiError(null)
+
+    if (basic.title.trim() === '') {
+      setAiError('先に行事名を入力してください')
+      return
+    }
+
+    if (
+      rows.some((row) => row.location_name.trim() !== '') &&
+      !(await confirm({
+        title: '行程表を下書きで置き換えますか？',
+        message: '入力中の行程は、AIが作った下書きで上書きされます。',
+        confirmLabel: '置き換える',
+      }))
+    ) {
+      return
+    }
+
+    setAiLoading(true)
+    try {
+      const response = await fetch('/api/ai/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId: group.id,
+          title: basic.title.trim(),
+          category: basic.category,
+          area: basic.area,
+          startDate: basic.start_date,
+          endDate: basic.end_date,
+          transport: basic.default_transport,
+        }),
+      })
+      const result = await response.json()
+
+      if (!response.ok) {
+        setAiError(result.error ?? '下書きの作成に失敗しました')
+        setAiLoading(false)
+        return
+      }
+
+      // 日付は開始日を基準に組み立てる（未入力なら空のままにする）
+      const base = basic.start_date ? new Date(`${basic.start_date}T00:00:00`) : null
+      setRows(
+        (result.rows ?? []).map(
+          (row: {
+            dayOffset: number
+            time: string
+            timeLabel: string
+            locationName: string
+            note: string
+          }) => ({
+            day: base ? addDays(base, row.dayOffset) : '',
+            time: row.time ?? '',
+            time_label: row.timeLabel ?? '',
+            location_name: row.locationName ?? '',
+            note: row.note ?? '',
+            transport: '',
+          })
+        )
+      )
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : '下書きの作成に失敗しました')
+    }
+    setAiLoading(false)
   }
 
   const addRow = () => setRows((current) => [...current, emptyRow(basic.start_date)])
@@ -436,6 +509,14 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
             <h2 className="text-sm font-bold text-gray-700">行程表（任意）</h2>
             <button
               type="button"
+              onClick={generateScheduleWithAi}
+              disabled={aiLoading}
+              className="pressable rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:border-green-400 disabled:opacity-50"
+            >
+              {aiLoading ? '作成中...' : '✨ AIで下書きを作る'}
+            </button>
+            <button
+              type="button"
               onClick={addRow}
               className="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition-ui hover:bg-green-100"
             >
@@ -445,6 +526,9 @@ export default function NewPlanClient({ group, currentUserId }: Props) {
           <p className="mb-3 text-xs text-gray-500">
             集合・到着・解散などの流れを入れられます（あとで詳細画面でも追加・編集できます）。
           </p>
+          {aiError && (
+            <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{aiError}</p>
+          )}
 
           {rows.length === 0 ? (
             <button
