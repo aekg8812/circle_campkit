@@ -997,29 +997,6 @@ export default function PlanDetailClient({
           />
         </dl>
 
-        {isCreator && (
-          <div className="mt-6">
-            <label htmlFor="plan-default-transport" className="mb-2 block text-sm font-bold text-gray-700">
-              全体の交通手段
-            </label>
-            <select
-              id="plan-default-transport"
-              value={plan.default_transport ?? ''}
-              onChange={(event) => updateDefaultTransport(event.target.value)}
-              disabled={updatingTransport}
-              className={inputClass}
-            >
-              <option value="">未定</option>
-              {transportOptions
-                .filter((option) => option !== '未定')
-                .map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-            </select>
-          </div>
-        )}
 
         <div className="mt-6">
           <h2 className="mb-2 text-sm font-bold text-gray-700">説明</h2>
@@ -1072,10 +1049,7 @@ export default function PlanDetailClient({
         canJoin={canJoin}
         capacityReached={capacityReached}
         deadlinePassed={deadlinePassed}
-        form={recruitmentForm}
-        setForm={setRecruitmentForm}
         submitting={submitting}
-        onSave={saveRecruitment}
         onJoin={joinPlan}
         onLeave={leavePlan}
         onChangeStatus={changeMyStatus}
@@ -1107,21 +1081,66 @@ export default function PlanDetailClient({
         />
       )}
 
+      {/* 起案者だけが使う操作をまとめる。
+         参加するだけの人にとっては全部ノイズなので、既定では畳んでおく。 */}
       {isCreator && (
-        <section className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-bold text-gray-700">計画の削除</h2>
-          <p className="mt-1 text-xs text-gray-500">
-            この計画に関する行程・募集・参加者・計画書がすべて削除されます。元に戻せません。
-          </p>
-          <button
-            type="button"
-            onClick={deletePlan}
-            disabled={submitting === 'delete-plan'}
-            className="mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition-ui hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
-          >
-            {submitting === 'delete-plan' ? '削除中...' : 'この計画を削除'}
-          </button>
-        </section>
+        <details className="group rounded-2xl bg-white p-4 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-bold text-gray-700">
+            <span>⚙️ この計画を管理</span>
+            <span aria-hidden className="text-gray-400 transition-ui group-open:rotate-90">
+              ›
+            </span>
+          </summary>
+
+          <div className="mt-4 space-y-5">
+            <div>
+              <label
+                htmlFor="plan-default-transport"
+                className="mb-2 block text-sm font-bold text-gray-700"
+              >
+                全体の交通手段
+              </label>
+              <select
+                id="plan-default-transport"
+                value={plan.default_transport ?? ''}
+                onChange={(event) => updateDefaultTransport(event.target.value)}
+                disabled={updatingTransport}
+                className={inputClass}
+              >
+                <option value="">未定</option>
+                {transportOptions
+                  .filter((option) => option !== '未定')
+                  .map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <RecruitmentSettingsForm
+              form={recruitmentForm}
+              setForm={setRecruitmentForm}
+              submitting={submitting}
+              onSave={saveRecruitment}
+            />
+
+            <div className="border-t border-red-100 pt-4">
+              <p className="text-sm font-bold text-gray-700">計画の削除</p>
+              <p className="mt-1 text-xs text-gray-500">
+                行程・募集・参加者・提出書類がすべて削除されます。元に戻せません。
+              </p>
+              <button
+                type="button"
+                onClick={deletePlan}
+                disabled={submitting === 'delete-plan'}
+                className="pressable mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+              >
+                {submitting === 'delete-plan' ? '削除中...' : 'この計画を削除'}
+              </button>
+            </div>
+          </div>
+        </details>
       )}
 
       {/* 参加直後: 持っていく道具・出せる車を登録してもらう（なければ「なし」） */}
@@ -1388,10 +1407,7 @@ function RecruitmentSection({
   canJoin,
   capacityReached,
   deadlinePassed,
-  form,
-  setForm,
   submitting,
-  onSave,
   onJoin,
   onLeave,
   onChangeStatus,
@@ -1410,15 +1426,7 @@ function RecruitmentSection({
   canJoin: boolean
   capacityReached: boolean
   deadlinePassed: boolean
-  form: { type: string; capacity: string; deadline: string; is_closed: boolean }
-  setForm: React.Dispatch<React.SetStateAction<{
-    type: string
-    capacity: string
-    deadline: string
-    is_closed: boolean
-  }>>
   submitting: string | null
-  onSave: (event: React.FormEvent<HTMLFormElement>) => void
   onJoin: (status?: 'going' | 'maybe') => void
   onLeave: () => void
   onChangeStatus: (status: 'going' | 'maybe') => void
@@ -1460,9 +1468,6 @@ function RecruitmentSection({
                   ? '締切を過ぎています'
                   : '参加受付中'}
           </p>
-          <p className="mt-1 text-xs text-gray-500">
-            参加登録は、ログインしている本人の分だけ操作できます。
-          </p>
         </div>
 
         {/* 集金の進み具合。予算が設定されている計画でだけ出す */}
@@ -1474,9 +1479,6 @@ function RecruitmentSection({
                 （一人 {budgetPerPerson.toLocaleString()}円 / 残り{' '}
                 {(unpaidCount * budgetPerPerson).toLocaleString()}円）
               </span>
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              受け取ったら、下の一覧で「未払い」を押して記録してください。
             </p>
           </div>
         )}
@@ -1567,7 +1569,7 @@ function RecruitmentSection({
                 type="button"
                 onClick={() => onJoin('going')}
                 disabled={submitting === 'participant' || (!canJoin && !isCreator)}
-                className="pressable rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                className="btn-primary flex-1 py-3 sm:flex-none sm:px-8"
               >
                 {isCreator ? '起案者を参加登録' : '参加する'}
               </button>
@@ -1576,7 +1578,7 @@ function RecruitmentSection({
                   type="button"
                   onClick={() => onJoin('maybe')}
                   disabled={submitting === 'participant' || !canJoin}
-                  className="pressable rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:border-amber-400 disabled:opacity-50"
+                  className="pressable rounded-xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 hover:border-amber-400 disabled:opacity-50"
                   title="行けるか分からない場合はこちら。あとから変更できます"
                 >
                   未定で登録
@@ -1591,7 +1593,7 @@ function RecruitmentSection({
               type="button"
               onClick={() => onChangeStatus('going')}
               disabled={submitting === 'participant'}
-              className="pressable rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+              className="btn-primary flex-1 py-3 sm:flex-none sm:px-8"
             >
               参加に変更する
             </button>
@@ -1601,7 +1603,7 @@ function RecruitmentSection({
               type="button"
               onClick={() => onChangeStatus('maybe')}
               disabled={submitting === 'participant'}
-              className="pressable rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-800 hover:border-amber-400 disabled:opacity-50"
+              className="pressable rounded-xl px-3 py-3 text-sm font-semibold text-amber-700 underline-offset-4 hover:underline disabled:opacity-50"
             >
               未定に変更
             </button>
@@ -1611,14 +1613,39 @@ function RecruitmentSection({
               type="button"
               onClick={onLeave}
               disabled={submitting === 'participant'}
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:border-red-400 disabled:opacity-50"
+              className="pressable rounded-xl px-3 py-3 text-sm font-semibold text-red-500 underline-offset-4 hover:underline disabled:opacity-50"
             >
               参加をキャンセル
             </button>
           )}
         </div>
 
-        {isCreator && (
+      </div>
+    </section>
+  )
+}
+
+
+/** 募集の設定（起案者のみ）。参加者には不要なので管理セクションに置く */
+function RecruitmentSettingsForm({
+  form,
+  setForm,
+  submitting,
+  onSave,
+}: {
+  form: { type: string; capacity: string; deadline: string; is_closed: boolean }
+  setForm: React.Dispatch<
+    React.SetStateAction<{
+      type: string
+      capacity: string
+      deadline: string
+      is_closed: boolean
+    }>
+  >
+  submitting: string | null
+  onSave: (event: React.FormEvent<HTMLFormElement>) => void
+}) {
+  return (
           <form onSubmit={onSave} className="space-y-3 border-t border-gray-100 pt-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -1683,9 +1710,6 @@ function RecruitmentSection({
               {submitting === 'recruitment' ? '保存中...' : '募集設定を保存'}
             </button>
           </form>
-        )}
-      </div>
-    </section>
   )
 }
 

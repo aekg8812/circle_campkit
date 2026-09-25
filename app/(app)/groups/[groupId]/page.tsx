@@ -93,10 +93,12 @@ export default async function GroupDashboardPage({
     participantCounts[row.plan_id] = (participantCounts[row.plan_id] ?? 0) + 1
   }
 
-  // 一覧で「参加中」を出すため、自分が参加している計画を控えておく
-  const myParticipantPlanIds = (participantRows ?? [])
-    .filter((row) => row.user_id === user.id)
-    .map((row) => row.plan_id)
+  // 一覧で「参加中」「未定」を出すため、自分の参加状態を控えておく
+  const myParticipantStatus: Record<string, string> = {}
+  for (const row of participantRows ?? []) {
+    if (row.user_id !== user.id) continue
+    myParticipantStatus[row.plan_id] = row.status ?? 'going'
+  }
 
   const recruitmentByPlan = Object.fromEntries(
     (recruitments ?? []).map((r) => [
@@ -112,7 +114,7 @@ export default async function GroupDashboardPage({
       plans={plans ?? []}
       recruitmentByPlan={recruitmentByPlan}
       participantCounts={participantCounts}
-      myParticipantPlanIds={myParticipantPlanIds}
+      myParticipantStatus={myParticipantStatus}
       currentUserId={user.id}
     />
   )
