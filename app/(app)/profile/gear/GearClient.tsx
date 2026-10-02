@@ -8,6 +8,7 @@ import { useState, useRef } from 'react'
 import { useConfirm } from '@/components/ConfirmDialog'
 import Image from 'next/image'
 import { toUserMessage } from '@/lib/errorMessage'
+import { Tent } from 'lucide-react'
 
 const CATEGORIES = ['テント', '寝袋', '調理', 'テーブル・チェア', '照明', 'その他']
 
@@ -156,7 +157,7 @@ export default function GearClient({ initialGear, userId }: Props) {
 
       <button
         onClick={openAdd}
-        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-ui"
+        className="w-full py-2 bg-green-600 hover:bg-green-800 text-white font-semibold rounded-lg transition-ui"
       >
         ＋ 道具を追加
       </button>
@@ -212,7 +213,7 @@ export default function GearClient({ initialGear, userId }: Props) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
+                className="flex-1 bg-green-600 hover:bg-green-800 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
               >
                 {isSubmitting ? '保存中...' : '保存'}
               </button>
@@ -247,7 +248,7 @@ export default function GearClient({ initialGear, userId }: Props) {
                 </div>
               ) : (
                 <div className="w-full h-28 bg-gray-100 rounded-lg mb-2 flex items-center justify-center text-3xl text-gray-400">
-                  🏕
+                  <Tent size={18} aria-hidden />
                 </div>
               )}
               <p className="font-semibold text-sm text-gray-800 truncate">{g.name}</p>

@@ -4,7 +4,7 @@
 //
 // 「よく行く場所」は年々変わるので、コードを直さずにアプリ内で足せるようにする。
 // 作り方は2通り:
-//   1. 計画詳細の「⭐ テンプレートに保存」で、うまくいった行程をそのまま残す
+//   1. 計画詳細の「テンプレートに保存」で、うまくいった行程をそのまま残す
 //   2. この画面で空から作る
 // どちらも、ここで名前・予算・行程を直せる。
 
@@ -16,6 +16,7 @@ import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { toUserMessage } from '@/lib/errorMessage'
 import type { PlanTemplate, TemplateScheduleRow } from '@/lib/planTemplates'
+import { Tent } from 'lucide-react'
 
 type Props = {
   group: { id: string; name: string }
@@ -91,7 +92,7 @@ export default function TemplatesClient({ group, currentUserId, templates }: Pro
       <p className="rounded-xl bg-white p-4 text-sm leading-6 text-gray-600 shadow-sm">
         よく行く場所を登録しておくと、<strong>計画を作るときに一括で入力</strong>できます。
         <br />
-        計画詳細の <strong>「⭐ テンプレートに保存」</strong> からも作れます。
+        計画詳細の <strong>「テンプレートに保存」</strong> からも作れます。
         うまくいった行程をそのまま残すなら、そちらが簡単です。
       </p>
 
@@ -101,7 +102,7 @@ export default function TemplatesClient({ group, currentUserId, templates }: Pro
 
       {templates.length === 0 ? (
         <div className="rounded-2xl bg-white px-6 py-10 text-center shadow-sm">
-          <p className="text-4xl">🏕️</p>
+          <Tent className="mx-auto text-gray-300" size={36} aria-hidden />
           <p className="mt-3 text-base font-bold text-gray-800">
             まだテンプレートがありません
           </p>

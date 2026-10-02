@@ -459,12 +459,12 @@ export default function DocumentClient({
         <div className="print:hidden">
           {incompleteParticipants.length === 0 ? (
             <p className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
-              ✅ 参加者全員のプロフィールがそろっています。提出準備OKです。
+              参加者全員のプロフィールがそろっています。提出準備OKです。
             </p>
           ) : (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm font-bold text-amber-800">
-                ⚠️ 名簿に未入力の項目があります（{incompleteParticipants.length}名）
+                名簿に未入力の項目があります（{incompleteParticipants.length}名）
               </p>
               <ul className="mt-2 space-y-1">
                 {incompleteParticipants.map((entry) => (
@@ -475,7 +475,7 @@ export default function DocumentClient({
                 ))}
               </ul>
               <p className="mt-2 text-xs text-amber-700">
-                該当メンバーにプロフィールの入力を依頼してください（本人がプロフィール画面で入力すると自動で反映されます）。
+                本人がプロフィール画面で入力すると、自動で反映されます。
               </p>
             </div>
           )}
@@ -501,7 +501,7 @@ export default function DocumentClient({
             </p>
             {carriedOver && (
               <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs leading-5 text-green-700">
-                💡 顧問教員・宛先・宿泊所・病院などを、<strong>前回の計画書から引き継ぎ</strong>ました。
+                顧問教員・宛先・宿泊所・病院などを、<strong>前回の計画書から引き継ぎ</strong>ました。
                 内容を確認して、今回に合わせて修正してください。
               </p>
             )}
@@ -794,7 +794,7 @@ export default function DocumentClient({
 
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={downloadPdf} disabled={generating} className="btn-primary">
-              {generating ? 'PDFを生成中...' : '📄 PDFで出力'}
+              {generating ? 'PDFを生成中...' : 'PDFで出力'}
             </button>
             <button
               type="button"
@@ -802,7 +802,7 @@ export default function DocumentClient({
               disabled={exporting}
               className="btn-secondary"
             >
-              {exporting ? 'Excelを生成中...' : '📊 Excelで出力'}
+              {exporting ? 'Excelを生成中...' : 'Excelで出力'}
             </button>
             <button type="button" onClick={() => window.print()} className="btn-secondary">
               印刷
@@ -818,7 +818,7 @@ export default function DocumentClient({
       {/* メールで提出する方法（送信はせず、手順とコピペ用の定型文を案内） */}
       {step === 'submit' && (
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/[0.03] print:hidden">
-        <h2 className="text-sm font-bold text-gray-700">📧 メールで提出する方法</h2>
+        <h2 className="text-sm font-bold text-gray-700">メールで提出する方法</h2>
         <div className="mt-1">
           <FirstTimeNote id="document-mail" label="提出の手順を見る">
         <p className="text-xs text-gray-500">
@@ -827,7 +827,7 @@ export default function DocumentClient({
 
         <ol className="mt-4 space-y-2">
           {[
-            '上の「📄 PDFで出力」でPDFをダウンロードする',
+            '上の「PDFで出力」でPDFをダウンロードする',
             'メールソフト（Gmail・大学メールなど）で新規メールを作成する',
             '宛先に学務係・指導教員のメールアドレスを入力する',
             '下の「件名」「本文」をコピーして貼り付ける（内容は必要に応じて調整）',
@@ -980,11 +980,11 @@ function SaveIndicator({ state }: { state: 'idle' | 'saving' | 'saved' | 'error'
     return <p className="text-xs text-gray-500 print:hidden">● 保存中...</p>
   }
   if (state === 'saved') {
-    return <p className="text-xs font-semibold text-green-700 print:hidden">✓ 保存しました</p>
+    return <p className="text-xs font-semibold text-green-700 print:hidden">保存しました</p>
   }
   return (
     <p className="text-xs font-semibold text-red-600 print:hidden">
-      ⚠ 保存できていません
+      保存できていません
     </p>
   )
 }

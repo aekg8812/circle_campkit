@@ -22,6 +22,7 @@ import {
   type PlanPhase,
 } from '@/lib/recruitmentStatus'
 import { toUserMessage } from '@/lib/errorMessage'
+import { Car, FileText, Pencil, User } from 'lucide-react'
 
 type Group = {
   id: string
@@ -721,7 +722,7 @@ export default function PlanDetailClient({
             className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700 disabled:opacity-50"
             title="この計画をコピーして、自分の新しい計画（未公開）を作ります"
           >
-            {submitting === 'duplicate' ? '複製中...' : '📋 自分の計画に複製'}
+            {submitting === 'duplicate' ? '複製中...' : '自分の計画に複製'}
           </button>
           <button
             type="button"
@@ -730,14 +731,15 @@ export default function PlanDetailClient({
             title="この行程をテンプレートとして保存し、次の計画づくりで使えるようにします"
             className="pressable rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-green-400 hover:text-green-700 disabled:opacity-50"
           >
-            {submitting === 'template' ? '保存中...' : '⭐ テンプレートに保存'}
+            {submitting === 'template' ? '保存中...' : 'テンプレートに保存'}
           </button>
           <Link
             href={`/groups/${group.id}/plans/${plan.id}/document`}
             className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition-ui hover:bg-green-100"
             title="学校に提出する書類（計画書＋参加者名簿）を作成します"
           >
-            📄 提出書類をつくる
+            <FileText size={16} aria-hidden />
+            提出書類をつくる
           </Link>
         </div>
       </div>
@@ -786,7 +788,8 @@ export default function PlanDetailClient({
               href={`/groups/${group.id}/plans/${plan.id}/edit`}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700"
             >
-              ✏️ 計画を編集
+              <Pencil size={14} aria-hidden />
+              計画を編集
             </Link>
           )}
         </div>
@@ -899,7 +902,7 @@ export default function PlanDetailClient({
               <p className="text-xs leading-5 text-gray-500">
                 行程・募集・参加者・提出書類がすべて削除されます。元に戻せません。
                 <br />
-                内容を直したいだけなら、上の「✏️ 計画を編集」を使ってください。
+                内容を直したいだけなら、上の「計画を編集」を使ってください。
               </p>
               <button
                 type="button"
@@ -925,8 +928,7 @@ export default function PlanDetailClient({
           <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <h2 className="text-base font-bold text-gray-800">持ち物・車の登録</h2>
             <p className="mt-1 text-xs leading-5 text-gray-500">
-              参加ありがとうございます！持っていく道具と、出せる車を選んでください。
-              みんなに共有され、かぶりや不足を防げます。
+              持っていく道具と出せる車を選ぶと、みんなに共有され、かぶりや不足を防げます。
             </p>
 
             {myGear.length === 0 && myCars.length === 0 ? (
@@ -945,7 +947,7 @@ export default function PlanDetailClient({
               <div className="mt-4 space-y-4">
                 {myGear.length > 0 && (
                   <div>
-                    <p className="mb-1.5 text-xs font-bold text-gray-600">🎒 持っていく道具</p>
+                    <p className="mb-1.5 text-xs font-bold text-gray-600">持っていく道具</p>
                     <div className="space-y-1">
                       {myGear.map((gear) => (
                         <label
@@ -973,7 +975,7 @@ export default function PlanDetailClient({
 
                 {myCars.length > 0 && (
                   <div>
-                    <p className="mb-1.5 text-xs font-bold text-gray-600">🚗 出せる車</p>
+                    <p className="mb-1.5 text-xs font-bold text-gray-600">出せる車</p>
                     <div className="space-y-1">
                       {myCars.map((car) => (
                         <label
@@ -1099,12 +1101,12 @@ function StatusManager({
           >
             {updatingStatus === 'recruiting'
               ? '公開しています...'
-              : '📣 募集を開始する（グループ全員に公開）'}
+              : '募集を開始する（グループ全員に公開）'}
           </button>
           {/* 編集ボタンは、すぐ下の「基本情報」の横に1つだけ置く。
              同じボタンが近くに2つあると、どちらを押すのか迷うため。 */}
           <p className="mt-2 text-xs text-amber-700">
-            公開したあとも、下の「✏️ 計画を編集」からいつでも直せます。
+            公開したあとも、下の「計画を編集」からいつでも直せます。
           </p>
         </div>
       </div>
@@ -1121,7 +1123,7 @@ function StatusManager({
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" onClick={onClose} disabled={busy} className="btn-primary">
-            {closing ? '締め切り中...' : '🔒 募集を締め切る'}
+            {closing ? '締め切り中...' : '募集を締め切る'}
           </button>
         </div>
       </div>
@@ -1302,7 +1304,7 @@ function RecruitmentSection({
                         }`}
                         title={participant.paid_at ? '取り消す' : '受け取ったことを記録する'}
                       >
-                        {participant.paid_at ? '✓ 受取済み' : '未払い'}
+                        {participant.paid_at ? '受取済み' : '未払い'}
                       </button>
                     ) : (
                       participant.user_id === currentUserId && (
@@ -1313,7 +1315,7 @@ function RecruitmentSection({
                               : 'bg-gray-100 text-gray-500'
                           }`}
                         >
-                          {participant.paid_at ? '✓ 支払い済み' : '未払い'}
+                          {participant.paid_at ? '支払い済み' : '未払い'}
                         </span>
                       )
                     )
@@ -1488,13 +1490,13 @@ function PreparationSection({
             className="h-full w-full object-cover"
           />
         ) : (
-          <span className="text-xs text-gray-500">👤</span>
+          <User className="text-gray-400" size={14} aria-hidden />
         )}
       </div>
       <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
         {prep.type === 'car' && (
           <span aria-hidden className="mr-1">
-            🚗
+            <Car size={16} aria-hidden />
           </span>
         )}
         {prep.body}
@@ -1526,7 +1528,7 @@ function PreparationSection({
           disabled={checking}
           className="pressable rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:border-green-400 disabled:opacity-50"
         >
-          {checking ? '点検中...' : '✨ 足りない物をチェック'}
+          {checking ? '点検中...' : '足りない物をチェック'}
         </button>
 
         {checkError && (
@@ -1552,7 +1554,7 @@ function PreparationSection({
                     }`}
                   >
                     <p className="font-bold">
-                      {finding.severity === 'warning' ? '⚠️ ' : 'ℹ️ '}
+                      
                       {finding.title}
                     </p>
                     <p className="mt-0.5 leading-5">{finding.detail}</p>
@@ -1570,7 +1572,7 @@ function PreparationSection({
       <div className="space-y-6 p-4">
         {/* ───────── 個人の持ち物 ───────── */}
         <div>
-          <p className="mb-2 text-sm font-bold text-gray-700">🎒 個人の持ち物</p>
+          <p className="mb-2 text-sm font-bold text-gray-700">個人の持ち物</p>
           {personalItems.length === 0 ? (
             <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">
               まだありません
@@ -1594,7 +1596,7 @@ function PreparationSection({
                       onClick={() => onAddItem(gear.name, 'gear')}
                       className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
                     >
-                      ＋ 🎒 {gear.name}
+                      ＋ {gear.name}
                     </button>
                   ))}
                   {carChips.map((car) => (
@@ -1605,7 +1607,7 @@ function PreparationSection({
                       onClick={() => onAddItem(carLabel(car), 'car')}
                       className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
                     >
-                      ＋ 🚗 {carLabel(car)}
+                      ＋ {carLabel(car)}
                     </button>
                   ))}
                 </div>
@@ -1631,7 +1633,7 @@ function PreparationSection({
 
         {/* ───────── 共同の持ち物 ───────── */}
         <div className="border-t border-gray-100 pt-5">
-          <p className="mb-2 text-sm font-bold text-gray-700">🤝 共同の持ち物（みんなで使う）</p>
+          <p className="mb-2 text-sm font-bold text-gray-700">共同の持ち物（みんなで使う）</p>
           {sharedItems.length === 0 ? (
             <p className="rounded-lg bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">
               まだありません
@@ -1732,7 +1734,7 @@ function ReviewSection({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-sm text-gray-500">👤</span>
+                      <User className="text-gray-400" size={16} aria-hidden />
                     )}
                   </div>
                   <p className="flex-1 text-sm font-semibold text-gray-800">
@@ -1787,7 +1789,7 @@ function ReviewSection({
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white transition-ui hover:bg-green-700 active:scale-[0.99] disabled:opacity-50"
+                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white transition-ui hover:bg-green-800 active:scale-[0.99] disabled:opacity-50"
               >
                 {submitting ? '保存中...' : hasMyReview ? '更新する' : '投稿する'}
               </button>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Tent } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
@@ -100,12 +101,12 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       <div>
         <Link
           href="/groups/new"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition-ui hover:bg-green-700 active:scale-[0.99]"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition-ui hover:bg-green-800 active:scale-[0.99]"
         >
           ＋ 新しいグループを作成
         </Link>
         <p className="mt-2 text-center text-xs text-gray-500">
-          サークルの「部屋」を作ります。作った人が管理者になり、参加パスワードを決めます。
+          作った人が管理者になり、参加パスワードを決めます。
         </p>
       </div>
 
@@ -116,7 +117,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
         </h2>
         {myGroups.length === 0 ? (
           <EmptyState
-            icon="⛺"
+            icon={Tent}
             title="まだグループに参加していません"
             description="下の検索から参加するか、新しいグループを作りましょう。"
           />
@@ -140,7 +141,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
           グループに参加する
         </h2>
         <p className="mb-3 text-xs text-gray-500">
-          入りたいグループを名前で探して、そのグループの参加パスワードを入力すると参加できます。
+          グループ名で探し、参加パスワードを入力すると参加できます。
         </p>
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
           <input
@@ -222,7 +223,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
+                  className="flex-1 bg-green-600 hover:bg-green-800 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
                 >
                   {isSubmitting ? '参加中...' : '参加する'}
                 </button>

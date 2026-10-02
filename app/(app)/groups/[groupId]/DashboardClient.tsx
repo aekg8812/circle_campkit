@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { Archive, Menu, NotebookPen, Tent } from 'lucide-react'
 import QRCode from 'qrcode'
 import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -431,7 +432,7 @@ export default function DashboardClient({
               }`}
             >
               <span aria-hidden className="text-base leading-none">
-                ☰
+                <Menu size={18} aria-hidden />
               </span>
               メニュー
             </button>
@@ -463,7 +464,7 @@ export default function DashboardClient({
                   <button
                     type="button"
                     onClick={shareOnLine}
-                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition-ui hover:bg-green-700"
+                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition-ui hover:bg-green-800"
                   >
                     LINEで招待
                   </button>
@@ -644,7 +645,7 @@ export default function DashboardClient({
           </h2>
           <Link
             href={`/groups/${group.id}/plans/new`}
-            className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-ui hover:bg-green-700 active:scale-95"
+            className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-ui hover:bg-green-800 active:scale-95"
           >
             ＋ 計画を作成
           </Link>
@@ -652,7 +653,7 @@ export default function DashboardClient({
         <div className="mb-3">
           <FirstTimeNote id="group-plans" label="計画とは">
             <p className="text-xs text-gray-500">
-              キャンプ・合宿などの「計画」を作って、募集・参加・提出書類づくりまでできます。「＋ 計画を作成」から始めましょう。テンプレートやAIの下書きから始めると早いです。
+              「＋ 計画を作成」から始めましょう。テンプレートやAIの下書きを使うと早いです。
             </p>
           </FirstTimeNote>
         </div>
@@ -702,7 +703,7 @@ export default function DashboardClient({
           {visiblePlans.length === 0 ? (
             <EmptyState
               bare
-              icon={activeTab === 'past' ? '📁' : activeTab === 'in_progress' ? '🏕️' : '🗒️'}
+              icon={activeTab === 'past' ? Archive : activeTab === 'in_progress' ? Tent : NotebookPen}
               title={
                 activeTab === 'mine'
                   ? 'まだ計画を作成していません'
@@ -904,7 +905,7 @@ export default function DashboardClient({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-2xl text-gray-400">⛺</span>
+                      <Tent className="text-gray-300" size={22} aria-hidden />
                     )}
                   </div>
                   <input

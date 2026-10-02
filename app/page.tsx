@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { MountainScene } from '@/components/MountainScene'
+import { Tent } from 'lucide-react'
 
 // トップ（ランディング）ページ。
 // ログイン済みならホームへ、未ログインならアウトドア風のヒーローを見せて
@@ -27,7 +28,8 @@ export default async function RootPage() {
       <div className="relative z-10 flex min-h-screen flex-col">
         <header className="flex items-center justify-between px-6 py-5 sm:px-10">
           <span className="text-2xl font-bold tracking-tight text-white drop-shadow">
-            ⛺ CampKit
+            <Tent size={28} aria-hidden />
+            CampKit
           </span>
           <Link
             href="/login"
@@ -68,10 +70,10 @@ export default async function RootPage() {
           </div>
 
           <div className="animate-fade-in-up mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-white/80 [animation-delay:320ms]">
-            <span>💬 LINEでログイン</span>
-            <span>🗺️ 行程表づくり</span>
-            <span>🙋 かんたん参加募集</span>
-            <span>📄 計画書PDF自動作成</span>
+            <span>LINEでログイン</span>
+            <span>行程表づくり</span>
+            <span>かんたん参加募集</span>
+            <span>計画書PDF自動作成</span>
           </div>
         </main>
       </div>

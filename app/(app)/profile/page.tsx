@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import ProfileTabs from './ProfileTabs'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
+import { CircleQuestionMark } from 'lucide-react'
 
 export const metadata = { title: 'プロフィール' }
 
@@ -46,7 +47,7 @@ export default async function ProfilePage({
           href="/help"
           className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700"
         >
-          <span aria-hidden>❓</span>
+          <CircleQuestionMark size={14} aria-hidden />
           ヘルプ・使い方
         </Link>
       </div>
@@ -54,7 +55,7 @@ export default async function ProfilePage({
       {missingFields.length > 0 && (
         <div className="mb-5 rounded-2xl border border-green-200 bg-green-50 p-4">
           <p className="text-sm font-bold text-green-800">
-            👋 ようこそ！まずはプロフィールを完成させましょう
+            ようこそ！まずはプロフィールを完成させましょう
           </p>
           <p className="mt-1 text-xs leading-5 text-green-700">
             ここで入力した内容は、計画に参加したときに<strong>計画書の名簿へ自動で反映</strong>されます。

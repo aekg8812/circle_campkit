@@ -97,7 +97,7 @@ function ConfirmDialog({
             type="button"
             onClick={() => onClose(true)}
             className={`pressable flex-1 rounded-xl py-2.5 text-sm font-bold text-white ${
-              danger ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+              danger ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-800'
             }`}
           >
             {options.confirmLabel ?? 'はい'}

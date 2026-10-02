@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { getMissingDocumentFields } from '@/lib/profileCompleteness'
 import { formatJpDateRange } from '@/lib/formatDate'
 import { formatMeetingTime, pickMeetingItem } from '@/lib/meetingPoint'
+import { Backpack, IdCard, MapPin, Megaphone, Tent, type LucideIcon } from 'lucide-react'
 import {
   formatCapacity,
   formatDeadline,
@@ -87,15 +88,15 @@ export default async function HomePage() {
   const in7Days = isoDateAfterDays(7)
   const myParticipantPlanIds = new Set((myParticipations ?? []).map((p) => p.plan_id))
 
-  // ★やることリスト（自分に関する未対応をまとめる）
+  // やることリスト（自分に関する未対応をまとめる）
   const preparedPlanIds = new Set((myPreparations ?? []).map((p) => p.plan_id))
-  const todos: { key: string; icon: string; text: string; href: string }[] = []
+  const todos: { key: string; Icon: LucideIcon; text: string; href: string }[] = []
 
   // 1) プロフィール未完成
   if (missingFields.length > 0) {
     todos.push({
       key: 'profile',
-      icon: '🪪',
+      Icon: IdCard,
       text: `プロフィールを完成させる（未入力：${missingFields.map((f) => f.label).join('・')}）`,
       href: '/profile',
     })
@@ -112,7 +113,7 @@ export default async function HomePage() {
     if (preparedPlanIds.has(plan.id)) continue
     todos.push({
       key: `prep-${plan.id}`,
-      icon: '🎒',
+      Icon: Backpack,
       text: `「${plan.title}」の持ち物を登録する`,
       href: `/groups/${plan.group_id}/plans/${plan.id}`,
     })
@@ -122,7 +123,7 @@ export default async function HomePage() {
   for (const draft of myDrafts ?? []) {
     todos.push({
       key: `draft-${draft.id}`,
-      icon: '📣',
+      Icon: Megaphone,
       text: `「${draft.title}」を公開する（未公開のまま）`,
       href: `/groups/${draft.group_id}/plans/${draft.id}`,
     })
@@ -250,7 +251,7 @@ export default async function HomePage() {
       {todos.length > 0 && (
         <section className="animate-fade-in-up rounded-2xl border border-amber-200 bg-amber-50 p-4 [animation-delay:40ms]">
           <p className="mb-2 text-sm font-bold text-amber-800">
-            ✅ やること（{todos.length}）
+            やること（{todos.length}）
           </p>
           <ul className="reveal-stagger space-y-1.5">
             {todos.map((todo) => (
@@ -260,7 +261,7 @@ export default async function HomePage() {
                   className="pressable flex items-center gap-2.5 rounded-lg bg-white/70 px-3 py-2 text-sm text-amber-900 hover:bg-white"
                 >
                   <span aria-hidden className="flex-shrink-0">
-                    {todo.icon}
+                    <todo.Icon size={18} aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1">{todo.text}</span>
                   <span aria-hidden className="flex-shrink-0 text-amber-400">
@@ -307,7 +308,7 @@ export default async function HomePage() {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-5xl text-gray-400">⛺</span>
+                      <Tent className="text-gray-300" size={44} aria-hidden />
                     )}
                   </div>
                   <div className="flex items-center justify-between gap-2 px-4 py-3">
@@ -424,7 +425,8 @@ function UpcomingCard({
           </p>
           {item.meetingLabel && (
             <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white/20 px-2.5 py-1 text-sm font-semibold backdrop-blur-sm">
-              📍 {item.meetingLabel}
+              <MapPin className="mr-1 inline-block align-[-0.15em]" size={14} aria-hidden />
+              {item.meetingLabel}
             </p>
           )}
         </div>
@@ -510,7 +512,7 @@ function WelcomeStrip() {
     <section className="animate-fade-in-up relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-br from-green-600 to-emerald-500 p-5 text-white shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <HeroSilhouette />
       <div className="relative z-10 min-w-0">
-        <p className="text-lg font-bold">CampKit へようこそ ⛺</p>
+        <p className="text-lg font-bold">CampKit へようこそ</p>
         <p className="mt-1 text-sm text-green-50">
           サークルの計画づくりから、学校提出用の計画書作成までをまとめて。
         </p>
@@ -541,7 +543,7 @@ function EmptyGroups() {
   return (
     <div className="animate-fade-in-up rounded-2xl bg-white px-6 py-10 text-center shadow-sm">
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
-        <span className="text-4xl">⛺</span>
+        <Tent size={36} aria-hidden />
       </div>
       <p className="text-base font-bold text-gray-800">
         まずはグループに参加しましょう
@@ -551,7 +553,7 @@ function EmptyGroups() {
       </p>
       <Link
         href="/groups"
-        className="pressable mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-8 py-4 text-base font-bold text-white shadow-sm hover:bg-green-700"
+        className="pressable mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-8 py-4 text-base font-bold text-white shadow-sm hover:bg-green-800"
       >
         グループに参加・作成する
       </Link>

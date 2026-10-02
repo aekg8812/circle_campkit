@@ -6,14 +6,52 @@
   color-scheme: light;
 }
 
+/* CampKit の緑。
+   Radix Colors の Grass をそのまま使う。
+   手で選んだ色を並べると明るさが揃わず、どれを文字に使えるか判断できない。
+   Grass は段階ごとに役割（背景・境界線・文字）が決まっていて、
+   コントラストも検証済みなので、迷いどころが無くなる。
+
+   段階の役割:
+     2  いちばん薄い背景      6  境界線（この色を基準にした）
+     4  ラベルなどの背景      9  輪郭線・フォーカス枠
+     11 文字・主ボタンの地    12 その上に重ねる濃い色（ホバー） */
+:root {
+  --grass-2: #f5fbf5;
+  --grass-4: #daf1db;
+  --grass-6: #b2ddb5;
+  --grass-7: #94ce9a;
+  --grass-8: #65ba74;
+  --grass-9: #46a758;
+  --grass-11: #2a7e3b;
+  --grass-12: #203c25;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* 欧文と数字は Geist、日本語は各OSの標準フォントに任せる。
-     Geist は欧文のみのため、日本語の指定を省くと端末ごとに見え方が変わる。 */
-  --font-sans: var(--font-geist-sans), "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+
+  /* LINEが配布しているフォント。和文と欧文が同じ設計なので、
+     数字や英字だけ別のフォントに見える現象が起きない。
+     読み込めない端末のために、OS標準の和文フォントを後ろに並べる。 */
+  --font-sans: var(--font-line-seed), "Hiragino Sans", "Hiragino Kaku Gothic ProN",
     "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-mono: ui-monospace, monospace;
+
+  /* Tailwind 標準の緑を、CampKit の緑に置き換える。
+     クラス名（bg-green-600 など）はそのままで色だけ変わるので、
+     画面側を1つずつ書き換えなくてよい。 */
+  --color-green-50: var(--grass-2);
+  --color-green-100: var(--grass-4);
+  --color-green-200: var(--grass-6);
+  --color-green-300: var(--grass-7);
+  --color-green-400: var(--grass-8);
+  --color-green-500: var(--grass-9);
+  --color-green-600: var(--grass-11);
+  --color-green-700: var(--grass-11);
+  --color-green-800: var(--grass-12);
+  --color-green-900: var(--grass-12);
+  --color-emerald-500: var(--grass-9);
 }
 
 body {
@@ -64,8 +102,8 @@ textarea::placeholder {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #22c55e;
-  outline-color: #22c55e;
+  border-color: var(--grass-9);
+  outline-color: var(--grass-9);
 }
 
 input:-webkit-autofill,
@@ -155,7 +193,7 @@ h1, h2, h3 {
 /* キーボード操作時のフォーカスを分かりやすく（アクセシビリティ） */
 a:focus-visible,
 button:focus-visible {
-  outline: 2px solid #22c55e;
+  outline: 2px solid var(--grass-9);
   outline-offset: 2px;
   border-radius: 0.5rem;
 }
@@ -171,15 +209,15 @@ button:focus-visible {
   font-size: 0.875rem;
   font-weight: 700;
   color: #ffffff;
-  background-color: #16a34a;
+  background-color: var(--grass-11);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .btn-primary:hover {
-  background-color: #15803d;
-  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.25);
+  background-color: var(--grass-12);
+  box-shadow: 0 6px 16px rgba(32, 60, 37, 0.25);
 }
 .btn-primary:active {
   transform: scale(0.98);
@@ -208,9 +246,9 @@ button:focus-visible {
     transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .btn-secondary:hover {
-  border-color: #86efac;
-  color: #15803d;
-  background-color: #f0fdf4;
+  border-color: var(--grass-7);
+  color: var(--grass-11);
+  background-color: var(--grass-2);
 }
 .btn-secondary:active {
   transform: scale(0.98);

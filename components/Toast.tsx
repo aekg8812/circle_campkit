@@ -31,7 +31,7 @@ let nextId = 1
 const typeStyles: Record<ToastType, { className: string; icon: string }> = {
   success: {
     className: 'bg-green-600 text-white ring-green-700/20',
-    icon: '✓',
+    icon: '\u2713',
   },
   error: {
     className: 'bg-red-600 text-white ring-red-700/20',
