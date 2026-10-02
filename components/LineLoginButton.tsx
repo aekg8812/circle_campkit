@@ -75,9 +75,14 @@ export default function LineLoginButton({ variant = 'inline', label, note }: Pro
             setLoading(false)
             return
           }
-          // 戻り先を今のページにして、戻ったら自動で続きを実行する
+          // 戻り先を今のページにして、戻ったら自動で続きを実行する。
+          //
+          // LINEの外（PCやスマホのブラウザ）から押した場合、この戻り先は
+          // LINEログインチャネルの「コールバックURL」に登録されている必要がある。
+          // クエリ文字列や # が付いたまま渡すと登録した文字列と変わってしまうため、
+          // 戻り先は必ず /login か /signup だけになるよう、後ろを落としてから渡す。
           markPending()
-          liff.login({ redirectUri: window.location.href })
+          liff.login({ redirectUri: window.location.origin + window.location.pathname })
           return
         }
 
