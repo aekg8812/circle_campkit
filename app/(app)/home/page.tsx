@@ -551,7 +551,7 @@ function EmptyGroups() {
       </p>
       <Link
         href="/groups"
-        className="pressable mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-8 py-4 text-base font-bold text-white shadow-sm hover:bg-green-700"
+        className="pressable mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-8 py-4 text-base font-bold text-white shadow-sm hover:bg-green-800"
       >
         グループに参加・作成する
       </Link>

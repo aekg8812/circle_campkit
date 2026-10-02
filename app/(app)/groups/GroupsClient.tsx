@@ -100,7 +100,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
       <div>
         <Link
           href="/groups/new"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition-ui hover:bg-green-700 active:scale-[0.99]"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-base font-bold text-white shadow-sm transition-ui hover:bg-green-800 active:scale-[0.99]"
         >
           ＋ 新しいグループを作成
         </Link>
@@ -222,7 +222,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
+                  className="flex-1 bg-green-600 hover:bg-green-800 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
                 >
                   {isSubmitting ? '参加中...' : '参加する'}
                 </button>

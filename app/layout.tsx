@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { LINE_Seed_JP } from "next/font/google";
 import "./globals.css";
 import { LiffProvider } from "@/components/LiffProvider";
 
@@ -9,14 +9,16 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// LINEの中で開くアプリなので、LINEが配布しているフォントに合わせる。
+// 和文・欧文が同じ設計で作られているため、OS任せのときのような
+// 「欧文と日本語で別のフォントが混ざる」見え方にならない。
+// 日本語は字数が多くファイルが大きいので、先読みはしない（表示は遅らせない）。
+const lineSeed = LINE_Seed_JP({
+  variable: "--font-line-seed",
+  weight: ["400", "700"],
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  preload: false,
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -38,7 +40,7 @@ export default function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${lineSeed.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <LiffProvider>{children}</LiffProvider>

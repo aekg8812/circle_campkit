@@ -1787,7 +1787,7 @@ function ReviewSection({
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white transition-ui hover:bg-green-700 active:scale-[0.99] disabled:opacity-50"
+                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white transition-ui hover:bg-green-800 active:scale-[0.99] disabled:opacity-50"
               >
                 {submitting ? '保存中...' : hasMyReview ? '更新する' : '投稿する'}
               </button>

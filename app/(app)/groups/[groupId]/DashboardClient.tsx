@@ -463,7 +463,7 @@ export default function DashboardClient({
                   <button
                     type="button"
                     onClick={shareOnLine}
-                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition-ui hover:bg-green-700"
+                    className="rounded-lg bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white transition-ui hover:bg-green-800"
                   >
                     LINEで招待
                   </button>
@@ -644,7 +644,7 @@ export default function DashboardClient({
           </h2>
           <Link
             href={`/groups/${group.id}/plans/new`}
-            className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-ui hover:bg-green-700 active:scale-95"
+            className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-ui hover:bg-green-800 active:scale-95"
           >
             ＋ 計画を作成
           </Link>

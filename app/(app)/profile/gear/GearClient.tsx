@@ -156,7 +156,7 @@ export default function GearClient({ initialGear, userId }: Props) {
 
       <button
         onClick={openAdd}
-        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-ui"
+        className="w-full py-2 bg-green-600 hover:bg-green-800 text-white font-semibold rounded-lg transition-ui"
       >
         ＋ 道具を追加
       </button>
@@ -212,7 +212,7 @@ export default function GearClient({ initialGear, userId }: Props) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
+                className="flex-1 bg-green-600 hover:bg-green-800 text-white font-semibold py-2 rounded-lg transition-ui disabled:opacity-50 text-sm"
               >
                 {isSubmitting ? '保存中...' : '保存'}
               </button>
