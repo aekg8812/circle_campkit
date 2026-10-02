@@ -106,7 +106,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
           ＋ 新しいグループを作成
         </Link>
         <p className="mt-2 text-center text-xs text-gray-500">
-          サークルの「部屋」を作ります。作った人が管理者になり、参加パスワードを決めます。
+          作った人が管理者になり、参加パスワードを決めます。
         </p>
       </div>
 
@@ -141,7 +141,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
           グループに参加する
         </h2>
         <p className="mb-3 text-xs text-gray-500">
-          入りたいグループを名前で探して、そのグループの参加パスワードを入力すると参加できます。
+          グループ名で探し、参加パスワードを入力すると参加できます。
         </p>
         <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
           <input

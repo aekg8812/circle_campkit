@@ -291,7 +291,7 @@ export default function DocumentTemplateClient({ group, documentTemplate }: Prop
               </div>
 
               <p className="text-xs leading-5 text-gray-500">
-                ※ 保存するまで変更は反映されません。外した項目は「標準の様式に戻す」でいつでも復活できます。
+                保存するまで反映されません。外した項目は「標準の様式に戻す」で戻せます。
               </p>
             </div>
           </div>
@@ -302,7 +302,7 @@ export default function DocumentTemplateClient({ group, documentTemplate }: Prop
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <h2 className="text-sm font-bold text-gray-700">提出書類の見本</h2>
         <p className="mt-1 text-xs leading-5 text-gray-500">
-          いま編集している様式を当てはめた、提出書類の見た目です。保存していない変更も反映されます。
+          保存していない変更も、この見本に反映されます。
         </p>
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
           ※ 中身はすべて<strong>架空のサンプル</strong>です。実際の計画書では、計画の内容と、

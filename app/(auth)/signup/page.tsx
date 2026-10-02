@@ -148,7 +148,7 @@ export default function SignupPage() {
           <h2 className="mb-1 text-sm font-bold text-gray-700">メールアドレスで登録</h2>
 
           <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-4">
-            学校用メールアドレス（例: xxxx@kyutech.ac.jp）の使用を推奨します。任意のメールでも登録可能です。
+            学校のメール（例: xxxx@kyutech.ac.jp）を推奨します。他のメールでも登録できます。
           </p>
 
           {serverError && (

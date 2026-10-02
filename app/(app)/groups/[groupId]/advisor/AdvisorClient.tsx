@@ -131,7 +131,7 @@ export default function AdvisorClient({ group }: { group: Group }) {
       </div>
 
       <p className="text-xs leading-5 text-gray-500">
-        ※ すでに作った計画書の内容は変わりません。これから作る計画書に反映されます。
+        すでに作った計画書は変わりません。これから作るものに反映されます。
       </p>
     </div>
   )

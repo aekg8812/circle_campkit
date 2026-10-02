@@ -928,8 +928,7 @@ export default function PlanDetailClient({
           <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <h2 className="text-base font-bold text-gray-800">持ち物・車の登録</h2>
             <p className="mt-1 text-xs leading-5 text-gray-500">
-              参加ありがとうございます！持っていく道具と、出せる車を選んでください。
-              みんなに共有され、かぶりや不足を防げます。
+              持っていく道具と出せる車を選ぶと、みんなに共有され、かぶりや不足を防げます。
             </p>
 
             {myGear.length === 0 && myCars.length === 0 ? (

@@ -445,7 +445,7 @@ export default function NewPlanClient({ group, currentUserId, groupTemplates }: 
         {showTemplates && (
           <div className="mt-4">
             <p className="text-xs text-gray-500">
-              近い企画を選んで「この内容をコピー」を押すと、下のフォームに一括で入力されます（日程・場所などはあとで調整できます）。
+              選んで「この内容をコピー」を押すと、下のフォームに入ります。日程や場所はあとで直せます。
             </p>
             {/* このグループが作ったテンプレートを先に出す（自分たちの定番だから） */}
             {groupTemplates.length > 0 && (
@@ -624,7 +624,7 @@ export default function NewPlanClient({ group, currentUserId, groupTemplates }: 
             </button>
           </div>
           <p className="mb-3 text-xs text-gray-500">
-            集合・到着・解散などの流れを入れられます（あとで「計画を編集」からも直せます）。
+            集合・到着・解散などの流れを入れられます。あとからでも直せます。
           </p>
           {aiError && (
             <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{aiError}</p>
@@ -775,8 +775,7 @@ export default function NewPlanClient({ group, currentUserId, groupTemplates }: 
         </section>
 
         <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs leading-5 text-gray-500">
-          作成するとそのまま保存され、「自分の計画」に入ります（この時点ではまだグループに公開されません）。
-          グループへの公開は、計画の詳細画面の「募集を開始する」から行えます。
+          作成した時点では、まだグループに公開されません。公開は詳細画面の「募集を開始する」から行います。
         </p>
 
         {serverError && (

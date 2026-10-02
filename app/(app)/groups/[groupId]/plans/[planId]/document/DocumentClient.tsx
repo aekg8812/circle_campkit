@@ -475,7 +475,7 @@ export default function DocumentClient({
                 ))}
               </ul>
               <p className="mt-2 text-xs text-amber-700">
-                該当メンバーにプロフィールの入力を依頼してください（本人がプロフィール画面で入力すると自動で反映されます）。
+                本人がプロフィール画面で入力すると、自動で反映されます。
               </p>
             </div>
           )}
