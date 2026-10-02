@@ -31,7 +31,13 @@ type FormValues = z.infer<typeof schema>
 
 export default function SignupPage() {
   const router = useRouter()
-  const { ready: liffReady, initializing: liffInitializing } = useLiff()
+  // Vercelのプレビュー配信は本番とURLが違う。LINEには本番のURLしか登録して
+  // いないため、ここでLINEログインを押すと必ず400 Bad Requestになる。
+  // ボタンを出さずに理由を伝えて、メールでの確認に誘導する。
+  const isPreviewDeploy = process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
+  const liff = useLiff()
+  const liffReady = liff.ready && !isPreviewDeploy
+  const liffInitializing = liff.initializing && !isPreviewDeploy
   // LINEが使えないと分かった場合だけ、メールの入力欄を最初から開く
   const lineUnavailable = !liffInitializing && !liffReady
   const [emailOpenedByUser, setEmailOpenedByUser] = useState(false)
@@ -91,6 +97,16 @@ export default function SignupPage() {
     <div className="w-full max-w-sm rounded-2xl bg-white/95 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur">
       <h1 className="text-center text-2xl font-bold text-green-700">⛺ CampKit</h1>
       <p className="mt-1 text-center text-sm text-gray-600">はじめる前に、アカウントを作ります</p>
+
+      {isPreviewDeploy && (
+        <p className="mt-5 rounded-lg bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
+          <strong>これは確認用のプレビュー版です。</strong>
+          <br />
+          LINEに登録してある戻り先が本番のURLなので、ここではLINEログインを使えません
+          （押すとLINE側で「400 Bad Request」になります）。
+          メールアドレスでログインして確認してください。
+        </p>
+      )}
 
       {/* 主役: LINEで登録。判定中は高さを確保して、ちらつかせない */}
       {liffInitializing ? (
