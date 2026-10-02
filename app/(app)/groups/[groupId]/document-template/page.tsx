@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DocumentTemplateClient from './DocumentTemplateClient'
 
-export const metadata = { title: '計画書の様式' }
+export const metadata = { title: '学校用計画書の様式' }
 
 export default async function DocumentTemplatePage({
   params,

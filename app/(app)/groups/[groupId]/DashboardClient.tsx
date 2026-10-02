@@ -494,8 +494,8 @@ export default function DashboardClient({
                     href={`/groups/${group.id}/templates`}
                   />
                   <SettingItem
-                    title="計画書の様式"
-                    description="学校に出す計画書に、どの項目をどの順で載せるかを決めます"
+                    title="学校用計画書の様式"
+                    description="学校に出す計画書に、どの項目をどの順で載せるかを決めます。見本で確認しながら変えられます"
                     href={`/groups/${group.id}/document-template`}
                   />
                   {isGroupCreator && (
