@@ -4,9 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
-import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
-import { openDatePicker } from '@/lib/dateInput'
 import { createGoogleMapsSearchUrl } from '@/lib/maps'
 import { formatJpDate, formatJpDateRange, formatJpDateTime } from '@/lib/formatDate'
 import { pickMeetingItem } from '@/lib/meetingPoint'
@@ -133,28 +131,11 @@ function carLabel(car: CarItem): string {
   return car.capacity != null ? `${name}（${car.capacity}人乗り）` : name
 }
 
-const scheduleSchema = z.object({
-  day: z.string().optional(),
-  time: z.string().optional(),
-  time_label: z.string().optional(),
-  location_name: z.string().min(1, '場所名を入力してください'),
-  note: z.string().optional(),
-  transport: z.string().optional(),
-})
 
-const recruitmentSchema = z.object({
-  type: z.enum(['first_come', 'deadline']),
-  capacity: z.string().optional(),
-  deadline: z.string().optional(),
-  is_closed: z.boolean(),
-})
 
 const inputClass =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500'
 
-const timeOptions = createHalfHourTimeOptions()
-const scheduleLabels = ['集合', '出発', '到着', '解散', '休憩', '買い出し']
-const transportOptions = ['未定', '車', '公共交通', '徒歩', 'その他']
 
 export default function PlanDetailClient({
   group,
@@ -183,33 +164,7 @@ export default function PlanDetailClient({
   const [selectedCarIds, setSelectedCarIds] = useState<string[]>([])
   const [prepSaving, setPrepSaving] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState<PlanStatus | null>(null)
-  const [updatingTransport, setUpdatingTransport] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
-  const [scheduleForm, setScheduleForm] = useState({
-    day: plan.start_date ?? '',
-    time: '',
-    time_label: '',
-    location_name: '',
-    note: '',
-    // 全体で選んだ交通手段を最初から入れておく（すぐ出るように）
-    transport: plan.default_transport ?? '',
-  })
-  // 行程の編集（編集中の行程IDと、その入力内容）
-  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null)
-  const [editScheduleForm, setEditScheduleForm] = useState({
-    day: '',
-    time: '',
-    time_label: '',
-    location_name: '',
-    note: '',
-    transport: '',
-  })
-  const [recruitmentForm, setRecruitmentForm] = useState({
-    type: recruitment?.type === 'first_come' ? 'first_come' : 'deadline',
-    capacity: recruitment?.capacity != null ? String(recruitment.capacity) : '',
-    deadline: toDateTimeLocalValue(recruitment?.deadline ?? null),
-    is_closed: recruitment?.is_closed ?? false,
-  })
   const [submitting, setSubmitting] = useState<string | null>(null)
   // 持ち物: 個人用・共同用でそれぞれ自由入力欄を持つ
   const [personalInput, setPersonalInput] = useState('')
@@ -232,7 +187,7 @@ export default function PlanDetailClient({
     recruitment?.capacity != null && goingParticipants.length >= recruitment.capacity
   // 締切は「時間締切」「先着順＆時間締切」の両方で使う
   const deadlinePassed = isDeadlinePassed(recruitment?.deadline)
-  // 募集が締め切られていれば「準備中」、実施日を過ぎていれば「過去」に自動で移る
+  // 募集が締め切られていれば「実施前」、実施日を過ぎていれば「過去」に自動で移る
   const recruitmentClosed = isRecruitmentClosed(recruitment, goingParticipants.length)
   const phase: PlanPhase = getPlanPhase({
     status: plan.status,
@@ -277,206 +232,11 @@ export default function PlanDetailClient({
     setUpdatingStatus(null)
   }
 
-  const updateDefaultTransport = async (value: string) => {
-    setServerError(null)
-    setUpdatingTransport(true)
 
-    const { error } = await supabase
-      .from('plans')
-      .update({
-        default_transport: value || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', plan.id)
-
-    if (error) {
-      setServerError(toUserMessage(error, '交通手段の更新できませんでした。'))
-      setUpdatingTransport(false)
-      return
-    }
-
-    refreshAfterMutation()
-    setUpdatingTransport(false)
-  }
-
-  const addScheduleItem = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setServerError(null)
-    setSubmitting('schedule')
-
-    const parsed = scheduleSchema.safeParse(scheduleForm)
-    if (!parsed.success) {
-      setServerError(parsed.error.issues[0]?.message ?? '行程を確認してください')
-      setSubmitting(null)
-      return
-    }
-
-    const { data } = parsed
-    const availableTimeOptions = getAvailableScheduleTimeOptions(scheduleItems, data.day || '')
-    if (data.time && !availableTimeOptions.includes(data.time)) {
-      setServerError('直前の行程より後の時刻を選択してください')
-      setSubmitting(null)
-      return
-    }
-
-    const nextSortOrder =
-      Math.max(...scheduleItems.map((item) => item.sort_order ?? 0), -1) + 1
-
-    const { error } = await supabase.from('schedule_items').insert({
-      plan_id: plan.id,
-      day: data.day || null,
-      time: data.time || null,
-      sort_order: nextSortOrder,
-      time_label: data.time_label || null,
-      location_name: data.location_name,
-      location_type: null,
-      map_query: data.location_name,
-      note: data.note || null,
-      transport: data.transport || null,
-    })
-
-    if (error) {
-      setServerError(toUserMessage(error, '行程の追加できませんでした。'))
-      setSubmitting(null)
-      return
-    }
-
-    setScheduleForm((current) => ({
-      ...current,
-      time: '',
-      time_label: '',
-      location_name: '',
-      note: '',
-      // 全体で選んだ交通手段は、次の行程でもそのまま出しておく
-      transport: plan.default_transport ?? '',
-    }))
-    refreshAfterMutation()
-    setSubmitting(null)
-  }
 
   /** 行程の編集を開始（その行の値をフォームに読み込む） */
-  const startEditSchedule = (item: ScheduleItem) => {
-    setServerError(null)
-    setEditingScheduleId(item.id)
-    setEditScheduleForm({
-      day: item.day ?? '',
-      time: item.time ? item.time.slice(0, 5) : '',
-      time_label: item.time_label ?? '',
-      location_name: item.location_name ?? '',
-      note: item.note ?? '',
-      transport: item.transport ?? '',
-    })
-  }
 
-  const saveScheduleEdit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!editingScheduleId) return
 
-    setServerError(null)
-
-    const parsed = scheduleSchema.safeParse(editScheduleForm)
-    if (!parsed.success) {
-      setServerError(parsed.error.issues[0]?.message ?? '行程を確認してください')
-      return
-    }
-
-    setSubmitting('schedule-edit')
-
-    const { data } = parsed
-    const { error } = await supabase
-      .from('schedule_items')
-      .update({
-        day: data.day || null,
-        time: data.time || null,
-        time_label: data.time_label || null,
-        location_name: data.location_name,
-        map_query: data.location_name,
-        note: data.note || null,
-        transport: data.transport || null,
-      })
-      .eq('id', editingScheduleId)
-
-    if (error) {
-      setServerError(toUserMessage(error, '行程の更新できませんでした。'))
-      setSubmitting(null)
-      return
-    }
-
-    setEditingScheduleId(null)
-    toast('行程を更新しました')
-    refreshAfterMutation()
-    setSubmitting(null)
-  }
-
-  const saveRecruitment = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setServerError(null)
-    setSubmitting('recruitment')
-
-    const parsed = recruitmentSchema.safeParse(recruitmentForm)
-    if (!parsed.success) {
-      setServerError(parsed.error.issues[0]?.message ?? '募集設定を確認してください')
-      setSubmitting(null)
-      return
-    }
-
-    const capacity =
-      parsed.data.capacity && parsed.data.capacity.trim() !== ''
-        ? Number(parsed.data.capacity)
-        : null
-
-    if (capacity != null && (!Number.isInteger(capacity) || capacity < 1)) {
-      setServerError('定員は1以上の整数で入力してください')
-      setSubmitting(null)
-      return
-    }
-
-    // どちらの方式でも締切日時は必須
-    if (!parsed.data.deadline) {
-      setServerError('締切日時を入力してください')
-      setSubmitting(null)
-      return
-    }
-
-    // datetime-local の値（ローカル時刻）を ISO（UTC）に変換して保存し、
-    // 保存⇔表示で時刻がずれないようにする（タイムゾーン対応）
-    const deadlineDate = new Date(parsed.data.deadline)
-    if (Number.isNaN(deadlineDate.getTime())) {
-      setServerError('締切日時が正しくありません')
-      setSubmitting(null)
-      return
-    }
-    const deadlineIso = deadlineDate.toISOString()
-
-    // 先着順（＆時間締切）のときだけ定員が必要
-    if (parsed.data.type === 'first_come' && capacity == null) {
-      setServerError('先着順では定員を入力してください')
-      setSubmitting(null)
-      return
-    }
-
-    const { error } = await supabase
-      .from('recruitments')
-      .upsert(
-        {
-          plan_id: plan.id,
-          type: parsed.data.type,
-          capacity: parsed.data.type === 'first_come' ? capacity : null,
-          deadline: deadlineIso,
-          is_closed: parsed.data.is_closed,
-        },
-        { onConflict: 'plan_id' }
-      )
-
-    if (error) {
-      setServerError(toUserMessage(error, '募集設定の保存できませんでした。'))
-      setSubmitting(null)
-      return
-    }
-
-    refreshAfterMutation()
-    setSubmitting(null)
-  }
 
   const joinPlan = async (status: 'going' | 'maybe' = 'going') => {
     // プロフィール未入力があれば、名簿が空欄になる旨を伝えてから参加させる
@@ -654,12 +414,12 @@ export default function PlanDetailClient({
     setSubmitting(null)
   }
 
-  // 募集を締め切る → 自動的に「準備中」フェーズへ進む
+  // 募集を締め切る → 自動的に「実施前」フェーズへ進む
   const closeRecruitment = async () => {
     if (
       !(await confirm({
         title: '募集を締め切りますか？',
-        message: '締め切ると「準備中」に進み、これ以上の参加はできなくなります。',
+        message: '締め切ると「実施前」に進み、これ以上の参加はできなくなります。',
         confirmLabel: '締め切る',
       }))
     ) {
@@ -686,7 +446,7 @@ export default function PlanDetailClient({
       return
     }
 
-    toast('募集を締め切りました。「準備中」に進みます')
+    toast('募集を締め切りました。「実施前」に進みます')
     refreshAfterMutation()
     setSubmitting(null)
   }
@@ -938,28 +698,6 @@ export default function PlanDetailClient({
     router.refresh()
   }
 
-  const deleteRow = async (
-    table: 'schedule_items',
-    id: string
-  ) => {
-    if (
-      !(await confirm({
-        title: 'この行程を削除しますか？',
-        confirmLabel: '削除する',
-        tone: 'danger',
-      }))
-    ) {
-      return
-    }
-    setServerError(null)
-
-    const { error } = await supabase.from(table).delete().eq('id', id)
-    if (error) {
-      setServerError(toUserMessage(error, '削除できませんでした。'))
-      return
-    }
-    refreshAfterMutation()
-  }
 
   return (
     <div className="space-y-6">
@@ -1041,7 +779,7 @@ export default function PlanDetailClient({
           />
         )}
 
-        {/* 基本情報（何が編集されるのかが分かるよう、この見出しの横に編集ボタンを置く） */}
+        {/* 基本情報。編集は「計画を編集」画面に集約しているので、ここは表示だけ */}
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-gray-700">基本情報</h2>
           {isCreator && phase !== 'past' && (
@@ -1049,7 +787,7 @@ export default function PlanDetailClient({
               href={`/groups/${group.id}/plans/${plan.id}/edit`}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-ui hover:border-green-400 hover:text-green-700"
             >
-              ✏️ 基本情報を編集
+              ✏️ 計画を編集
             </Link>
           )}
         </div>
@@ -1096,18 +834,7 @@ export default function PlanDetailClient({
         items={scheduleItems}
         defaultTransport={plan.default_transport}
         isCreator={isCreator}
-        form={scheduleForm}
-        setForm={setScheduleForm}
-        submitting={submitting === 'schedule'}
-        onSubmit={addScheduleItem}
-        onDelete={(id) => deleteRow('schedule_items', id)}
-        editingId={editingScheduleId}
-        editForm={editScheduleForm}
-        setEditForm={setEditScheduleForm}
-        editSubmitting={submitting === 'schedule-edit'}
-        onStartEdit={startEditSchedule}
-        onCancelEdit={() => setEditingScheduleId(null)}
-        onSaveEdit={saveScheduleEdit}
+        editHref={`/groups/${group.id}/plans/${plan.id}/edit`}
       />
 
       <RecruitmentSection
@@ -1129,9 +856,10 @@ export default function PlanDetailClient({
         maybeCount={maybeParticipants.length}
         budgetPerPerson={plan.budget_per_person}
         missingProfileFields={missingProfileFields}
+        editHref={`/groups/${group.id}/plans/${plan.id}/edit`}
       />
 
-      {/* 持ち物・準備は、募集を開始してから（募集中・準備中）だけ表示する */}
+      {/* 持ち物・準備は、募集を開始してから（募集中・実施前）だけ表示する */}
       {(phase === 'recruiting' || phase === 'in_progress') && (
         <PreparationSection
           planId={plan.id}
@@ -1163,40 +891,8 @@ export default function PlanDetailClient({
             </span>
           </summary>
 
-          <div className="mt-4 space-y-5">
+          <div className="mt-4">
             <div>
-              <label
-                htmlFor="plan-default-transport"
-                className="mb-2 block text-sm font-bold text-gray-700"
-              >
-                全体の交通手段
-              </label>
-              <select
-                id="plan-default-transport"
-                value={plan.default_transport ?? ''}
-                onChange={(event) => updateDefaultTransport(event.target.value)}
-                disabled={updatingTransport}
-                className={inputClass}
-              >
-                <option value="">未定</option>
-                {transportOptions
-                  .filter((option) => option !== '未定')
-                  .map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <RecruitmentSettingsForm
-              form={recruitmentForm}
-              setForm={setRecruitmentForm}
-              submitting={submitting}
-              onSave={saveRecruitment}
-            />
-
-            <div className="border-t border-red-100 pt-4">
               <p className="text-sm font-bold text-gray-700">計画の削除</p>
               <p className="mt-1 text-xs text-gray-500">
                 行程・募集・参加者・提出書類がすべて削除されます。元に戻せません。
@@ -1333,7 +1029,7 @@ export default function PlanDetailClient({
 
 // 状態（下書き/募集中/過去）の意味を説明し、次にとる操作を分かりやすく提示する
 // 計画の状態は一方向にだけ進む（不可逆）:
-//   未公開 →（募集開始）→ 募集中 →（締め切り/締切日時/定員）→ 準備中 →（実施日経過）→ 過去
+//   未公開 →（募集開始）→ 募集中 →（締め切り/締切日時/定員）→ 実施前 →（実施日経過）→ 過去
 // 戻す操作は用意しない。各フェーズで「次にやること」だけを提示する。
 function StatusManager({
   phase,
@@ -1380,7 +1076,7 @@ function StatusManager({
             </span>
             <span className="text-amber-300">→</span>
             <span className="rounded-full bg-white px-2 py-0.5 text-gray-500 ring-1 ring-gray-200">
-              準備中
+              実施前
             </span>
             <span className="text-amber-300">→</span>
             <span className="rounded-full bg-white px-2 py-0.5 text-gray-500 ring-1 ring-gray-200">
@@ -1406,7 +1102,7 @@ function StatusManager({
           <div className="mt-2 flex items-center justify-between text-xs">
             <span className="text-amber-700">まだ内容を直せます：</span>
             <Link href={editHref} className="font-bold text-green-700 hover:underline">
-              ✏️ 基本情報を編集
+              ✏️ 計画を編集
             </Link>
           </div>
         </div>
@@ -1420,7 +1116,7 @@ function StatusManager({
         <p className="text-sm font-bold text-green-800">「募集中」です（グループに公開中）</p>
         <p className="mt-1 text-xs leading-5 text-green-700">
           メンバーが参加できます。締切日時を過ぎるか、定員に達するか、下の「募集を締め切る」を押すと、
-          自動的に<strong>「準備中」</strong>へ進みます。
+          自動的に<strong>「実施前」</strong>へ進みます。
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Link href={editHref} className="btn-secondary">
@@ -1437,7 +1133,7 @@ function StatusManager({
   if (phase === 'in_progress') {
     return (
       <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-        <p className="text-sm font-bold text-indigo-800">「準備中」です</p>
+        <p className="text-sm font-bold text-indigo-800">「実施前」です</p>
         <p className="mt-1 text-xs leading-5 text-indigo-700">
           募集は締め切られ、参加者が確定しました。当日に向けて、行程や持ち物を確認しましょう。
           <strong>実施日（終了日）を過ぎると、自動的に「過去」へ移ります。</strong>
@@ -1487,6 +1183,7 @@ function RecruitmentSection({
   maybeCount,
   budgetPerPerson,
   missingProfileFields,
+  editHref,
 }: {
   recruitment: Recruitment | null
   participants: Participant[]
@@ -1506,6 +1203,7 @@ function RecruitmentSection({
   maybeCount: number
   budgetPerPerson: number | null
   missingProfileFields: { label: string }[]
+  editHref: string
 }) {
   // 未定は定員に数えないので、確定した人数を主に出す
   const participantCountText =
@@ -1519,7 +1217,16 @@ function RecruitmentSection({
 
   return (
     <section className="rounded-2xl bg-white shadow-sm">
-      <SectionHeader title="募集・参加" />
+      <SectionHeader
+        title="募集・参加"
+        action={
+          isCreator && !recruitment?.is_closed ? (
+            <Link href={editHref} className="text-xs font-semibold text-green-700 hover:underline">
+              募集設定を編集
+            </Link>
+          ) : null
+        }
+      />
       <div className="space-y-5 p-4">
         <div className="grid gap-4 sm:grid-cols-3">
           <DetailItem label="募集方式" value={recruitmentTypeLabel(recruitment?.type)} />
@@ -1698,91 +1405,6 @@ function RecruitmentSection({
 
 
 /** 募集の設定（起案者のみ）。参加者には不要なので管理セクションに置く */
-function RecruitmentSettingsForm({
-  form,
-  setForm,
-  submitting,
-  onSave,
-}: {
-  form: { type: string; capacity: string; deadline: string; is_closed: boolean }
-  setForm: React.Dispatch<
-    React.SetStateAction<{
-      type: string
-      capacity: string
-      deadline: string
-      is_closed: boolean
-    }>
-  >
-  submitting: string | null
-  onSave: (event: React.FormEvent<HTMLFormElement>) => void
-}) {
-  return (
-          <form onSubmit={onSave} className="space-y-3 border-t border-gray-100 pt-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label htmlFor="recruitment-type" className="mb-1 block text-xs font-medium text-gray-600">募集方式</label>
-                <select
-                  id="recruitment-type"
-                  value={form.type}
-                  onChange={(event) => {
-                    const type = event.target.value
-                    setForm((current) => ({
-                      ...current,
-                      type,
-                      // 締切は両方式で使うので残す。定員は先着順のときだけ
-                      capacity: type === 'first_come' ? current.capacity : '',
-                    }))
-                  }}
-                  className={inputClass}
-                >
-                  <option value="deadline">時間締切</option>
-                  <option value="first_come">先着順＆時間締切</option>
-                </select>
-              </div>
-              {form.type === 'first_come' && (
-                <div>
-                  <label htmlFor="recruitment-capacity" className="mb-1 block text-xs font-medium text-gray-600">定員（先着人数）</label>
-                  <input
-                    id="recruitment-capacity"
-                    type="number"
-                    min={1}
-                    value={form.capacity}
-                    onChange={(event) => setForm((current) => ({ ...current, capacity: event.target.value }))}
-                    className={inputClass}
-                    placeholder="例: 10"
-                  />
-                </div>
-              )}
-            </div>
-            <div>
-              <label htmlFor="recruitment-deadline" className="mb-1 block text-xs font-medium text-gray-600">締切日時</label>
-              <input
-                id="recruitment-deadline"
-                type="datetime-local"
-                onClick={openDatePicker}
-                value={form.deadline}
-                onChange={(event) => setForm((current) => ({ ...current, deadline: event.target.value }))}
-                className={inputClass}
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={form.is_closed}
-                onChange={(event) => setForm((current) => ({ ...current, is_closed: event.target.checked }))}
-                className="h-4 w-4"
-              />
-              募集を締め切る
-            </label>
-            <button
-              disabled={submitting === 'recruitment'}
-              className="w-full rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
-            >
-              {submitting === 'recruitment' ? '保存中...' : '募集設定を保存'}
-            </button>
-          </form>
-  )
-}
 
 // 持ち物・準備：上に「個人の持ち物」、下に「共同の持ち物（みんなで使う）」を
 // それぞれ独立した欄として表示し、各欄に追加ボタンを置く（見やすさ優先）。
@@ -2196,76 +1818,50 @@ function ReviewSection({
   )
 }
 
+/**
+ * 行程表。表示だけを担当する。
+ * 以前はここで追加・編集・削除までできたが、計画作成画面と二重になって
+ * 「どこで直すのか」が分からなかったため、編集は編集画面に集約した。
+ */
 function ScheduleSection({
   items,
   defaultTransport,
   isCreator,
-  form,
-  setForm,
-  submitting,
-  onSubmit,
-  onDelete,
-  editingId,
-  editForm,
-  setEditForm,
-  editSubmitting,
-  onStartEdit,
-  onCancelEdit,
-  onSaveEdit,
+  editHref,
 }: {
   items: ScheduleItem[]
   defaultTransport: string | null
   isCreator: boolean
-  form: {
-    day: string
-    time: string
-    time_label: string
-    location_name: string
-    note: string
-    transport: string
-  }
-  setForm: React.Dispatch<React.SetStateAction<{
-    day: string
-    time: string
-    time_label: string
-    location_name: string
-    note: string
-    transport: string
-  }>>
-  submitting: boolean
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
-  onDelete: (id: string) => void
-  editingId: string | null
-  editForm: {
-    day: string
-    time: string
-    time_label: string
-    location_name: string
-    note: string
-    transport: string
-  }
-  setEditForm: React.Dispatch<React.SetStateAction<{
-    day: string
-    time: string
-    time_label: string
-    location_name: string
-    note: string
-    transport: string
-  }>>
-  editSubmitting: boolean
-  onStartEdit: (item: ScheduleItem) => void
-  onCancelEdit: () => void
-  onSaveEdit: (event: React.FormEvent<HTMLFormElement>) => void
+  editHref: string
 }) {
-  const availableTimeOptions = getAvailableScheduleTimeOptions(items, form.day)
   const groupedItems = groupScheduleItemsByDay(items)
 
   return (
     <section className="rounded-2xl bg-white shadow-sm">
-      <SectionHeader title="行程表" />
-      <div className="divide-y divide-gray-100">
+      <SectionHeader
+        title="行程表"
+        action={
+          isCreator && items.length > 0 ? (
+            <Link href={editHref} className="text-xs font-semibold text-green-700 hover:underline">
+              編集
+            </Link>
+          ) : null
+        }
+      />
+
+      <div className="pb-2">
         {items.length === 0 ? (
-          <EmptyState text="行程はまだありません" />
+          <div className="px-4 pb-4">
+            <EmptyState text="行程はまだありません" />
+            {isCreator && (
+              <Link
+                href={editHref}
+                className="pressable mt-3 block rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-center text-xs font-semibold text-green-700 hover:border-green-400"
+              >
+                行程表をつくる
+              </Link>
+            )}
+          </div>
         ) : (
           groupedItems.map((group) => (
             <div key={group.day ?? 'undated'}>
@@ -2281,115 +1877,6 @@ function ScheduleSection({
                   // タイムラインの縦線を、最初と最後で余らせないための判定
                   const isFirst = index === 0
                   const isLast = index === group.items.length - 1
-
-                  // 編集中の行は、その場でフォームに切り替える
-                  if (editingId === item.id) {
-                    return (
-                      <form
-                        key={item.id}
-                        onSubmit={onSaveEdit}
-                        className="space-y-3 bg-green-50/40 px-4 py-4"
-                      >
-                        <p className="text-xs font-bold text-gray-600">行程を編集</p>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          <input
-                            type="date"
-                            onClick={openDatePicker}
-                            value={editForm.day}
-                            onChange={(event) =>
-                              setEditForm((current) => ({ ...current, day: event.target.value }))
-                            }
-                            className={inputClass}
-                          />
-                          <select
-                            value={editForm.time}
-                            onChange={(event) =>
-                              setEditForm((current) => ({ ...current, time: event.target.value }))
-                            }
-                            className={inputClass}
-                          >
-                            <option value="">時刻未定</option>
-                            {timeOptions.map((time) => (
-                              <option key={time} value={time}>
-                                {time}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={editForm.time_label}
-                            onChange={(event) =>
-                              setEditForm((current) => ({
-                                ...current,
-                                time_label: event.target.value,
-                              }))
-                            }
-                            className={inputClass}
-                          >
-                            <option value="">ラベルなし</option>
-                            {scheduleLabels.map((label) => (
-                              <option key={label} value={label}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <input
-                          value={editForm.location_name}
-                          onChange={(event) =>
-                            setEditForm((current) => ({
-                              ...current,
-                              location_name: event.target.value,
-                            }))
-                          }
-                          className={inputClass}
-                          placeholder="場所名"
-                        />
-                        <textarea
-                          value={editForm.note}
-                          onChange={(event) =>
-                            setEditForm((current) => ({ ...current, note: event.target.value }))
-                          }
-                          className={`${inputClass} min-h-16 resize-y`}
-                          placeholder="この場所の注釈（任意）"
-                        />
-                        <select
-                          value={editForm.transport}
-                          onChange={(event) =>
-                            setEditForm((current) => ({
-                              ...current,
-                              transport: event.target.value,
-                            }))
-                          }
-                          className={inputClass}
-                        >
-                          <option value="">
-                            全体の交通手段を使う{defaultTransport ? `（${defaultTransport}）` : '（未定）'}
-                          </option>
-                          {transportOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            disabled={editSubmitting}
-                            className="btn-primary flex-1"
-                          >
-                            {editSubmitting ? '保存中...' : '変更を保存'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={onCancelEdit}
-                            className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-ui hover:bg-gray-200"
-                          >
-                            キャンセル
-                          </button>
-                        </div>
-                      </form>
-                    )
-                  }
 
                   return (
                     <div key={item.id} className="flex gap-3 px-4">
@@ -2440,34 +1927,16 @@ function ScheduleSection({
                               </p>
                             )}
                           </div>
-                          <div className="flex flex-shrink-0 items-center gap-2">
-                            {mapUrl && (
-                              <a
-                                href={mapUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
-                              >
-                                地図
-                              </a>
-                            )}
-                            {isCreator && (
-                              <>
-                                <button
-                                  onClick={() => onStartEdit(item)}
-                                  className="text-xs font-semibold text-gray-500 hover:text-green-700"
-                                >
-                                  編集
-                                </button>
-                                <button
-                                  onClick={() => onDelete(item.id)}
-                                  className="text-xs font-semibold text-red-500 hover:text-red-700"
-                                >
-                                  削除
-                                </button>
-                              </>
-                            )}
-                          </div>
+                          {mapUrl && (
+                            <a
+                              href={mapUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="pressable flex-shrink-0 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
+                            >
+                              地図
+                            </a>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2478,90 +1947,16 @@ function ScheduleSection({
           ))
         )}
       </div>
-
-      {isCreator && (
-        <form onSubmit={onSubmit} className="space-y-3 border-t border-gray-100 p-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <input
-              type="date"
-              onClick={openDatePicker}
-              value={form.day}
-              onChange={(event) => setForm((current) => ({
-                ...current,
-                day: event.target.value,
-                time: '',
-              }))}
-              className={inputClass}
-            />
-            <select
-              value={form.time}
-              onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))}
-              className={inputClass}
-            >
-              <option value="">時刻未定</option>
-              {availableTimeOptions.map((time) => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
-            <select
-              value={form.time_label}
-              onChange={(event) => setForm((current) => ({ ...current, time_label: event.target.value }))}
-              className={inputClass}
-            >
-              <option value="">ラベルなし</option>
-              {scheduleLabels.map((label) => (
-                <option key={label} value={label}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <input
-              value={form.location_name}
-              onChange={(event) => setForm((current) => ({ ...current, location_name: event.target.value }))}
-              className={inputClass}
-              placeholder="場所名"
-            />
-          </div>
-          <textarea
-            value={form.note}
-            onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
-            className={`${inputClass} min-h-20 resize-y`}
-            placeholder="この場所の注釈（任意）"
-          />
-          <select
-            value={form.transport}
-            onChange={(event) => setForm((current) => ({ ...current, transport: event.target.value }))}
-            className={inputClass}
-          >
-            <option value="">
-              全体の交通手段を使う{defaultTransport ? `（${defaultTransport}）` : '（未定）'}
-            </option>
-            {transportOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <button
-            disabled={submitting}
-            className="w-full rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            {submitting ? '追加中...' : '行程を追加'}
-          </button>
-        </form>
-      )}
     </section>
   )
 }
 
-function SectionHeader({ title }: { title: string }) {
+
+function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
-    <div className="border-b border-gray-100 px-4 py-3">
+    <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
       <h2 className="text-sm font-bold text-gray-700">{title}</h2>
+      {action}
     </div>
   )
 }
@@ -2592,44 +1987,8 @@ function recruitmentTypeLabel(value: string | null | undefined) {
   return '未設定'
 }
 
-function toDateTimeLocalValue(value: string | null) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const yyyy = date.getFullYear()
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
-  const hh = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}`
-}
 
-function createHalfHourTimeOptions() {
-  const options: string[] = []
-  for (let hour = 0; hour < 24; hour += 1) {
-    for (const minute of [0, 30]) {
-      options.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)
-    }
-  }
-  return options
-}
 
-function getAvailableScheduleTimeOptions(items: ScheduleItem[], selectedDay: string) {
-  const sameDayItems = selectedDay
-    ? items.filter((item) => item.day === selectedDay)
-    : items
-
-  const previousTime = [...sameDayItems]
-    .reverse()
-    .find((item) => item.time)?.time
-    ?.slice(0, 5)
-
-  if (!previousTime) {
-    return timeOptions
-  }
-
-  return timeOptions.filter((time) => time > previousTime)
-}
 
 function groupScheduleItemsByDay(items: ScheduleItem[]) {
   const groups: { day: string | null; items: ScheduleItem[] }[] = []

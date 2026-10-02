@@ -88,10 +88,10 @@ export function todayLocal(now: Date = new Date()): string {
 
 /**
  * 表示用のフェーズを求める。状態遷移は一方向（不可逆）:
- *   下書き →（募集開始）→ 募集中 →（締切/定員/締め切り操作）→ 準備中 →（実施日経過）→ 過去
+ *   下書き →（募集開始）→ 募集中 →（締切/定員/締め切り操作）→ 実施前 →（実施日経過）→ 過去
  *
- * 「準備中」と「過去」はDBの状態を書き換えずに自動判定する。
- * これにより、実施日を過ぎた計画が「募集中/準備中」のまま残る問題が起きない。
+ * 「実施前」と「過去」はDBの状態を書き換えずに自動判定する。
+ * これにより、実施日を過ぎた計画が「募集中/実施前」のまま残る問題が起きない。
  */
 export function getPlanPhase(params: {
   status: string | null | undefined
@@ -112,7 +112,7 @@ export function getPlanPhase(params: {
   const lastDay = endDate || startDate
   if (lastDay && lastDay < today) return 'past'
 
-  // 募集が締め切られていれば「準備中」
+  // 募集が締め切られていれば「実施前」
   if (recruitmentClosed) return 'in_progress'
 
   return 'recruiting'

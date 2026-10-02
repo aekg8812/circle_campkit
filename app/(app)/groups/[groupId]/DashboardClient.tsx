@@ -261,12 +261,12 @@ export default function DashboardClient({
     router.refresh()
   }
   // 表示フェーズを計画ごとに求める
-  // （締め切られたら「準備中」、実施日を過ぎたら「過去」に自動で移る）
+  // （締め切られたら「実施前」、実施日を過ぎたら「過去」に自動で移る）
   const phaseOf = (plan: Plan) => planPhaseOf(plan, recruitmentByPlan, participantCounts)
 
   // 自分の参加状態（参加 / 未定）を一覧に出すために使う
 
-  // タブ: 募集中／準備中／過去／自分の計画（自分が作成した全ての計画）
+  // タブ: 募集中／実施前／過去／自分の計画（自分が作成した全ての計画）
   const filteredPlans =
     activeTab === 'mine'
       ? plans.filter((plan) => plan.creator_id === currentUserId)
@@ -632,7 +632,7 @@ export default function DashboardClient({
               onClick={() => setActiveTab('recruiting')}
             />
             <PlanTabButton
-              label="準備中"
+              label="実施前"
               active={activeTab === 'in_progress'}
               onClick={() => setActiveTab('in_progress')}
             />
@@ -677,7 +677,7 @@ export default function DashboardClient({
                   : activeTab === 'recruiting'
                     ? '募集中の計画はありません'
                     : activeTab === 'in_progress'
-                      ? '準備中の計画はありません'
+                      ? '実施前の計画はありません'
                       : '過去の計画はありません'
               }
               description={

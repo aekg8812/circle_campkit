@@ -179,7 +179,7 @@ export default async function HomePage() {
     ])
   )
 
-  // 締め切られた（＝準備中）・実施日を過ぎた（＝過去）ものは参加できないので出さない
+  // 締め切られた（＝実施前）・実施日を過ぎた（＝過去）ものは参加できないので出さない
   const recruitingOpen = openPlans
     .filter(
       (plan) =>
