@@ -9,6 +9,7 @@ import { dayBeforeDeadline, diffInDays, isDeadlineTooLate, shiftIsoDate } from '
 import { PLAN_TEMPLATES, type PlanTemplate } from '@/lib/planTemplates'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { toUserMessage } from '@/lib/errorMessage'
+import { Copy } from 'lucide-react'
 
 type Group = {
   id: string
@@ -430,7 +431,7 @@ export default function NewPlanClient({ group, currentUserId, groupTemplates }: 
           className="flex w-full items-center justify-between gap-3 text-left"
         >
           <span>
-            <span className="text-sm font-bold text-gray-700">📋 テンプレートから作成</span>
+            <span className="text-sm font-bold text-gray-700">テンプレートから作成</span>
             <span className="ml-2 text-xs text-gray-500">（任意・選ぶと一括入力）</span>
           </span>
           <span
@@ -612,7 +613,7 @@ export default function NewPlanClient({ group, currentUserId, groupTemplates }: 
               disabled={aiLoading}
               className="pressable rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:border-green-400 disabled:opacity-50"
             >
-              {aiLoading ? '作成中...' : '✨ AIで下書きを作る'}
+              {aiLoading ? '作成中...' : 'AIで下書きを作る'}
             </button>
             <button
               type="button"
@@ -775,7 +776,7 @@ export default function NewPlanClient({ group, currentUserId, groupTemplates }: 
 
         <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs leading-5 text-gray-500">
           作成するとそのまま保存され、「自分の計画」に入ります（この時点ではまだグループに公開されません）。
-          グループへの公開は、計画の詳細画面の「📣 募集を開始する」から行えます。
+          グループへの公開は、計画の詳細画面の「募集を開始する」から行えます。
         </p>
 
         {serverError && (
@@ -821,7 +822,8 @@ function TemplateCard({
           onClick={onApply}
           className="pressable mt-2 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 hover:bg-green-100"
         >
-          📋 この内容をコピー
+          <Copy size={16} aria-hidden />
+          この内容をコピー
         </button>
       </div>
     </div>

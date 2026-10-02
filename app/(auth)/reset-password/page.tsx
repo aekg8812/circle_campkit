@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Tent } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
 import type { EmailOtpType } from '@supabase/supabase-js'
@@ -101,7 +102,10 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="w-full max-w-sm rounded-2xl bg-white/95 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur">
-      <h1 className="text-2xl font-bold text-center mb-2 text-green-700">⛺ CampKit</h1>
+      <h1 className="text-2xl font-bold text-center mb-2 text-green-700">
+        <Tent className="mr-1.5 inline-block align-[-0.15em]" size={24} aria-hidden />
+        CampKit
+      </h1>
       <h2 className="text-lg font-semibold mb-4 text-gray-700">新しいパスワードの設定</h2>
 
       {checking ? (

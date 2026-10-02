@@ -3,6 +3,7 @@
 // 行程表を下までスクロールしなくても答えが出る状態にするのが狙い。
 
 import { createGoogleMapsSearchUrl } from '@/lib/maps'
+import { Backpack, MapPin } from 'lucide-react'
 import { formatJpDate } from '@/lib/formatDate'
 import { formatMeetingTime, type MeetingScheduleItem } from '@/lib/meetingPoint'
 
@@ -33,7 +34,8 @@ export default function MeetingCard({ item, myItems = [] }: Props) {
 
       <div className="mt-2 flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-green-50">
-          📍 {place || '場所未定'}
+          <MapPin className="mr-1 inline-block align-[-0.15em]" size={15} aria-hidden />
+          {place || '場所未定'}
         </span>
         {mapUrl && (
           <a
@@ -49,7 +51,8 @@ export default function MeetingCard({ item, myItems = [] }: Props) {
 
       {myItems.length > 0 && (
         <p className="mt-2.5 border-t border-white/20 pt-2.5 text-xs text-green-50">
-          🎒 自分の持ち物: {myItems.join('、')}
+          <Backpack className="mr-1 inline-block align-[-0.15em]" size={15} aria-hidden />
+          自分の持ち物: {myItems.join('、')}
         </p>
       )}
     </section>

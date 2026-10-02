@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Tent } from 'lucide-react'
 import { useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
 import LineLoginButton from '@/components/LineLoginButton'
@@ -95,7 +96,10 @@ export default function SignupPage() {
 
   return (
     <div className="w-full max-w-sm rounded-2xl bg-white/95 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur">
-      <h1 className="text-center text-2xl font-bold text-green-700">⛺ CampKit</h1>
+      <h1 className="text-center text-2xl font-bold text-green-700">
+        <Tent className="mr-1.5 inline-block align-[-0.15em]" size={24} aria-hidden />
+        CampKit
+      </h1>
       <p className="mt-1 text-center text-sm text-gray-600">はじめる前に、アカウントを作ります</p>
 
       {isPreviewDeploy && (

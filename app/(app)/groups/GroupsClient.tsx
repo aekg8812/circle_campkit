@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Tent } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
@@ -116,7 +117,7 @@ export default function GroupsClient({ myGroups, otherGroups, initialJoinGroupId
         </h2>
         {myGroups.length === 0 ? (
           <EmptyState
-            icon="⛺"
+            icon={Tent}
             title="まだグループに参加していません"
             description="下の検索から参加するか、新しいグループを作りましょう。"
           />

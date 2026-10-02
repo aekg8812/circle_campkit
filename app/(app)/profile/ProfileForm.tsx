@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useToast } from '@/components/Toast'
 import { toUserMessage } from '@/lib/errorMessage'
+import { User } from 'lucide-react'
 
 const schema = z.object({
   name: z.string().min(1, '名前を入力してください'),
@@ -135,7 +136,7 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
           {avatarUrl ? (
             <Image src={avatarUrl} alt="アバター" width={80} height={80} className="object-cover w-full h-full" />
           ) : (
-            <span className="text-3xl text-gray-500">👤</span>
+            <User className="text-gray-400" size={28} aria-hidden />
           )}
         </div>
         <div>

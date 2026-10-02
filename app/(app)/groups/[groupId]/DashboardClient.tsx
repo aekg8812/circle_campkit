@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { Archive, Menu, NotebookPen, Tent } from 'lucide-react'
 import QRCode from 'qrcode'
 import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -431,7 +432,7 @@ export default function DashboardClient({
               }`}
             >
               <span aria-hidden className="text-base leading-none">
-                ☰
+                <Menu size={18} aria-hidden />
               </span>
               メニュー
             </button>
@@ -702,7 +703,7 @@ export default function DashboardClient({
           {visiblePlans.length === 0 ? (
             <EmptyState
               bare
-              icon={activeTab === 'past' ? '📁' : activeTab === 'in_progress' ? '🏕️' : '🗒️'}
+              icon={activeTab === 'past' ? Archive : activeTab === 'in_progress' ? Tent : NotebookPen}
               title={
                 activeTab === 'mine'
                   ? 'まだ計画を作成していません'
@@ -904,7 +905,7 @@ export default function DashboardClient({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-2xl text-gray-400">⛺</span>
+                      <Tent className="text-gray-300" size={22} aria-hidden />
                     )}
                   </div>
                   <input

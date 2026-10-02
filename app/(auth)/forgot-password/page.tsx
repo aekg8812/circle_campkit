@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { Tent } from 'lucide-react'
 import { useState } from 'react'
 import { toUserMessage } from '@/lib/errorMessage'
 
@@ -61,7 +62,10 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className={cardClass}>
-      <h1 className="text-2xl font-bold text-center mb-2 text-green-700">⛺ CampKit</h1>
+      <h1 className="text-2xl font-bold text-center mb-2 text-green-700">
+        <Tent className="mr-1.5 inline-block align-[-0.15em]" size={24} aria-hidden />
+        CampKit
+      </h1>
       <h2 className="text-lg font-semibold mb-1 text-gray-700">パスワードの再設定</h2>
       <p className="text-sm text-gray-500 mb-4">
         登録したメールアドレスを入力してください。再設定用のリンクをお送りします。

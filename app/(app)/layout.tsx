@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Tent } from 'lucide-react'
 import LogoutButton from '@/components/LogoutButton'
 import BottomNav from '@/components/BottomNav'
 import AppBackdrop from '@/components/AppBackdrop'
@@ -28,7 +29,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               href="/home"
               className="pressable flex items-center gap-1 text-xl font-bold tracking-tight text-green-700 hover:text-green-800"
             >
-              ⛺ CampKit
+              <Tent size={20} aria-hidden />
+              CampKit
             </Link>
             <nav className="flex items-center gap-4 text-sm">
               <Link href="/home" className="hidden text-gray-600 transition-colors duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:text-green-700 sm:inline">

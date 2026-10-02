@@ -104,7 +104,7 @@ export default async function PlanDocumentPage({
       : Promise.resolve({ data: null }),
   ])
 
-  // ★書類の使い回し: この計画にまだ書類が無いとき、同じグループの直近の計画書から
+  // 書類の使い回し: この計画にまだ書類が無いとき、同じグループの直近の計画書から
   //   顧問教員・宛先・宿泊所・病院などを初期値として引き継ぐ（毎回入力しなくて済む）。
   let previousDocument: typeof planDocument = null
   if (!planDocument) {

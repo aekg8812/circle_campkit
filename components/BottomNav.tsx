@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { House, User } from 'lucide-react'
 
+// 絵文字は端末ごとに絵柄・太さ・色が変わるため、線画のアイコンを使う
 const items = [
-  { href: '/home', label: 'ホーム', icon: '🏠' },
-  { href: '/profile', label: 'プロフィール', icon: '👤' },
+  { href: '/home', label: 'ホーム', Icon: House },
+  { href: '/profile', label: 'プロフィール', Icon: User },
 ]
 
 export default function BottomNav() {
@@ -29,7 +31,7 @@ export default function BottomNav() {
                 active ? 'text-green-700' : 'text-gray-500'
               }`}
             >
-              <span className="text-xl leading-none">{item.icon}</span>
+              <item.Icon size={22} strokeWidth={active ? 2.4 : 2} aria-hidden />
               {item.label}
             </Link>
           )
