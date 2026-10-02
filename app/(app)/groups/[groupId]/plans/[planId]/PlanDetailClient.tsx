@@ -773,7 +773,6 @@ export default function PlanDetailClient({
             groupName={group.name}
             updatingStatus={updatingStatus}
             closing={submitting === 'close'}
-            editHref={`/groups/${group.id}/plans/${plan.id}/edit`}
             onChange={updateStatus}
             onClose={closeRecruitment}
           />
@@ -1036,7 +1035,6 @@ function StatusManager({
   groupName,
   updatingStatus,
   closing,
-  editHref,
   onChange,
   onClose,
 }: {
@@ -1044,7 +1042,6 @@ function StatusManager({
   groupName: string
   updatingStatus: PlanStatus | null
   closing: boolean
-  editHref: string
   onChange: (status: PlanStatus) => void
   onClose: () => void
 }) {
@@ -1099,12 +1096,11 @@ function StatusManager({
               ? '公開しています...'
               : '📣 募集を開始する（グループ全員に公開）'}
           </button>
-          <div className="mt-2 flex items-center justify-between text-xs">
-            <span className="text-amber-700">まだ内容を直せます：</span>
-            <Link href={editHref} className="font-bold text-green-700 hover:underline">
-              ✏️ 計画を編集
-            </Link>
-          </div>
+          {/* 編集ボタンは、すぐ下の「基本情報」の横に1つだけ置く。
+             同じボタンが近くに2つあると、どちらを押すのか迷うため。 */}
+          <p className="mt-2 text-xs text-amber-700">
+            公開したあとも、下の「✏️ 計画を編集」からいつでも直せます。
+          </p>
         </div>
       </div>
     )
@@ -1119,9 +1115,6 @@ function StatusManager({
           自動的に<strong>「実施前」</strong>へ進みます。
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link href={editHref} className="btn-secondary">
-            ✏️ 内容を再編集
-          </Link>
           <button type="button" onClick={onClose} disabled={busy} className="btn-primary">
             {closing ? '締め切り中...' : '🔒 募集を締め切る'}
           </button>
@@ -1139,9 +1132,6 @@ function StatusManager({
           <strong>実施日（終了日）を過ぎると、自動的に「過去」へ移ります。</strong>
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link href={editHref} className="btn-secondary">
-            ✏️ 内容を再編集
-          </Link>
           <button
             type="button"
             onClick={() => onChange('past')}
@@ -1849,6 +1839,15 @@ function ScheduleSection({
         }
       />
 
+      {/* 全体の交通手段はここに1度だけ出す。
+         以前は行ごとに同じ内容が並んでいて、くどかった。 */}
+      {defaultTransport && items.length > 0 && (
+        <p className="border-b border-gray-100 px-4 py-2 text-xs text-gray-600">
+          交通手段は全体で <span className="font-semibold text-gray-800">{defaultTransport}</span>
+          です
+        </p>
+      )}
+
       <div className="pb-2">
         {items.length === 0 ? (
           <div className="px-4 pb-4">
@@ -1873,7 +1872,9 @@ function ScheduleSection({
                   const mapQuery = item.map_query || item.location_name || ''
                   const mapUrl = createGoogleMapsSearchUrl(mapQuery)
                   const timeText = item.time?.slice(0, 5) || '未定'
-                  const transport = item.transport || defaultTransport
+                  // 全体と違う区間だけ注釈を出す。同じなら上の1行で足りる
+                  const transportNote =
+                    item.transport && item.transport !== defaultTransport ? item.transport : null
                   // タイムラインの縦線を、最初と最後で余らせないための判定
                   const isFirst = index === 0
                   const isLast = index === group.items.length - 1
@@ -1921,9 +1922,9 @@ function ScheduleSection({
                                 {item.note}
                               </p>
                             )}
-                            {transport && (
-                              <p className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                                交通手段: {transport}
+                            {transportNote && (
+                              <p className="mt-1 text-xs text-gray-500">
+                                ※ ここは {transportNote} で移動します
                               </p>
                             )}
                           </div>
