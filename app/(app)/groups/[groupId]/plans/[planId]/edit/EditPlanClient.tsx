@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
 import { toUserMessage } from '@/lib/errorMessage'
+import { dayBeforeDeadline, diffInDays, isDeadlineTooLate, shiftIsoDate } from '@/lib/dateShift'
 
 type Group = { id: string; name: string }
 
@@ -136,8 +137,64 @@ export default function EditPlanClient({ group, plan, scheduleItems, recruitment
     is_closed: recruitment?.is_closed ?? false,
   })
 
-  const setBasicField = (key: keyof typeof basic, value: string) =>
+  // 日程を直したときに、行程表・終了日・締切が古いままだと計画が食い違う。
+  // 何を自動で合わせたかは、画面にも出して分かるようにしている。
+  const [dateAdjustNote, setDateAdjustNote] = useState<string | null>(null)
+
+  const setBasicField = (key: keyof typeof basic, value: string) => {
+    if (key === 'start_date') {
+      changeStartDate(value)
+      return
+    }
     setBasic((current) => ({ ...current, [key]: value }))
+  }
+
+  /**
+   * 開始日の変更。ずれた日数だけ、行程表の日付と終了日を同じように動かす。
+   * 1日目・2日目の関係を保ったまま、計画ごと移せるようにするため。
+   */
+  const changeStartDate = (value: string) => {
+    const shift = basic.start_date && value ? diffInDays(basic.start_date, value) : null
+
+    if (shift == null || shift === 0) {
+      setBasic((current) => ({ ...current, start_date: value }))
+      return
+    }
+
+    const adjusted: string[] = []
+
+    const movedRows = rows.filter((row) => row.day !== '').length
+    if (movedRows > 0) {
+      adjusted.push(`行程表の日付（${movedRows}件）`)
+      setRows((current) =>
+        current.map((row) => (row.day === '' ? row : { ...row, day: shiftIsoDate(row.day, shift) }))
+      )
+    }
+
+    const nextEndDate = basic.end_date === '' ? '' : shiftIsoDate(basic.end_date, shift)
+    if (basic.end_date !== '') adjusted.push('終了日')
+    setBasic((current) => ({ ...current, start_date: value, end_date: nextEndDate }))
+
+    // 締切が開催日以降に取り残されると、募集の意味がなくなるので前日に寄せる
+    const movedDeadline =
+      recruit.enabled && recruit.deadline !== '' && isDeadlineTooLate(recruit.deadline, value)
+        ? dayBeforeDeadline(value)
+        : null
+    if (movedDeadline) {
+      adjusted.push('募集の締切')
+      setRecruit((current) => ({ ...current, deadline: movedDeadline }))
+    }
+
+    setDateAdjustNote(
+      adjusted.length > 0
+        ? `開始日を${shift > 0 ? `${shift}日あと` : `${-shift}日まえ`}にずらしたので、${adjusted.join('・')}も同じだけ合わせました。`
+        : null
+    )
+  }
+
+  // 締切が開催日より後なら、保存時に前日へ寄せる。その予告を画面にも出す
+  const deadlineTooLate =
+    recruit.enabled && isDeadlineTooLate(recruit.deadline, basic.start_date)
 
   const setRow = (index: number, key: keyof ScheduleRow, value: string) =>
     setRows((current) =>
@@ -189,7 +246,11 @@ export default function EditPlanClient({ group, plan, scheduleItems, recruitment
         setServerError('募集を設定する場合は締切日時を入力してください')
         return
       }
-      const date = new Date(recruit.deadline)
+      // 締切が開催日以降だと募集の意味がなくなるので、前日の23:59まで戻す
+      const deadlineValue = deadlineTooLate
+        ? (dayBeforeDeadline(basic.start_date) ?? recruit.deadline)
+        : recruit.deadline
+      const date = new Date(deadlineValue)
       if (Number.isNaN(date.getTime())) {
         setServerError('締切日時が正しくありません')
         return
@@ -370,6 +431,12 @@ export default function EditPlanClient({ group, plan, scheduleItems, recruitment
                 />
               </Field>
             </div>
+
+            {dateAdjustNote && (
+              <p className="rounded-lg bg-green-50 px-3 py-2 text-xs leading-5 text-green-800">
+                {dateAdjustNote}
+              </p>
+            )}
 
             <Field label="場所エリア">
               <input
@@ -577,6 +644,12 @@ export default function EditPlanClient({ group, plan, scheduleItems, recruitment
                   className={inputClass}
                 />
               </Field>
+              {deadlineTooLate && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  締切が開催日より後になっています。このまま保存すると、
+                  <strong>前日の23:59</strong>に合わせます。
+                </p>
+              )}
 
               <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
                 <input
