@@ -1,5 +1,11 @@
 'use client'
 
+// 新規登録画面。
+//
+// ログイン画面と同じ考え方で、主役は「LINEではじめる」ボタン1つ。
+// 氏名・メール・パスワードの入力は、LINEが使えない人向けの控えとして折りたたむ。
+// LINEで入った場合はアカウントがその場で作られるので、この画面を通らなくてよい。
+
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -9,6 +15,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
 import LineLoginButton from '@/components/LineLoginButton'
+import { useLiff } from '@/components/LiffProvider'
 import { toUserMessage } from '@/lib/errorMessage'
 
 const schema = z.object({
@@ -24,6 +31,12 @@ type FormValues = z.infer<typeof schema>
 
 export default function SignupPage() {
   const router = useRouter()
+  const { ready: liffReady, initializing: liffInitializing } = useLiff()
+  // LINEが使えないと分かった場合だけ、メールの入力欄を最初から開く
+  const lineUnavailable = !liffInitializing && !liffReady
+  const [emailOpenedByUser, setEmailOpenedByUser] = useState(false)
+  const showEmailForm = emailOpenedByUser || lineUnavailable
+
   const [serverError, setServerError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const {
@@ -76,92 +89,128 @@ export default function SignupPage() {
 
   return (
     <div className="w-full max-w-sm rounded-2xl bg-white/95 p-8 shadow-xl ring-1 ring-black/5 backdrop-blur">
-      <h1 className="text-2xl font-bold text-center mb-2 text-green-700">⛺ CampKit</h1>
-        <h2 className="text-lg font-semibold mb-1 text-gray-700">新規登録</h2>
+      <h1 className="text-center text-2xl font-bold text-green-700">⛺ CampKit</h1>
+      <p className="mt-1 text-center text-sm text-gray-600">はじめる前に、アカウントを作ります</p>
 
-        <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-4">
-          学校用メールアドレス（例: xxxx@kyutech.ac.jp）の使用を推奨します。任意のメールでも登録可能です。
-        </p>
-
-        {serverError && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">
-            {serverError}
-          </p>
-        )}
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label htmlFor="signup-name" className="block text-sm font-medium text-gray-700 mb-1">氏名</label>
-            <input
-              {...register('name')}
-              id="signup-name"
-              autoComplete="name"
-              placeholder="山田 太郎"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+      {/* 主役: LINEで登録。判定中は高さを確保して、ちらつかせない */}
+      {liffInitializing ? (
+        <div aria-hidden className="mt-6">
+          <div className="h-14 w-full animate-pulse rounded-xl bg-gray-100" />
+          <div className="mx-auto mt-2 h-3 w-3/4 animate-pulse rounded bg-gray-100" />
+        </div>
+      ) : (
+        liffReady && (
+          <div className="mt-6">
+            <LineLoginButton
+              variant="hero"
+              label="LINEではじめる"
+              note="確認メールのやり取りなしで、すぐに使いはじめられます"
             />
-            {errors.name && (
-              <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>
-            )}
           </div>
+        )
+      )}
 
-          <div>
-            <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-1">
-              メールアドレス
-            </label>
-            <input
-              {...register('email')}
-              id="signup-email"
-              type="email"
-              autoComplete="email"
-              inputMode="email"
-              placeholder="example@kyutech.ac.jp"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-            {errors.email && (
-              <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
-            <PasswordInput
-              {...register('password')}
-              id="signup-password"
-              autoComplete="new-password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-            {errors.password && (
-              <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="signup-password-confirm" className="block text-sm font-medium text-gray-700 mb-1">
-              パスワード（確認）
-            </label>
-            <PasswordInput
-              {...register('confirmPassword')}
-              id="signup-password-confirm"
-              autoComplete="new-password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-            {errors.confirmPassword && (
-              <p className="text-xs text-red-500 mt-1">{errors.confirmPassword.message}</p>
-            )}
-          </div>
-
+      {/* 控えの手段: メールアドレスで登録 */}
+      <div className={liffInitializing || liffReady ? 'mt-6 border-t border-gray-100 pt-5' : 'mt-6'}>
+        {!showEmailForm ? (
           <button
-            type="submit"
-            disabled={isSubmitting}
-            className="btn-primary w-full py-3"
+            type="button"
+            onClick={() => setEmailOpenedByUser(true)}
+            className="pressable w-full rounded-xl border border-gray-200 px-4 py-3 text-center transition-ui hover:border-green-400 hover:bg-green-50"
           >
-            {isSubmitting ? '登録中...' : 'アカウント作成'}
+            <span className="block text-xs text-gray-500">LINEでうまくいかない場合</span>
+            <span className="mt-0.5 block text-sm font-semibold text-gray-700">
+              メールアドレスで登録
+            </span>
           </button>
-        </form>
+        ) : (
+          <>
+          <h2 className="mb-1 text-sm font-bold text-gray-700">メールアドレスで登録</h2>
 
-      <LineLoginButton />
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-4">
+            学校用メールアドレス（例: xxxx@kyutech.ac.jp）の使用を推奨します。任意のメールでも登録可能です。
+          </p>
 
-      <p className="text-sm text-center text-gray-500 mt-6">
+          {serverError && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">
+              {serverError}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div>
+              <label htmlFor="signup-name" className="block text-sm font-medium text-gray-700 mb-1">氏名</label>
+              <input
+                {...register('name')}
+                id="signup-name"
+                autoComplete="name"
+                placeholder="山田 太郎"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              {errors.name && (
+                <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-1">
+                メールアドレス
+              </label>
+              <input
+                {...register('email')}
+                id="signup-email"
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="example@kyutech.ac.jp"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              {errors.email && (
+                <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
+              <PasswordInput
+                {...register('password')}
+                id="signup-password"
+                autoComplete="new-password"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              {errors.password && (
+                <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="signup-password-confirm" className="block text-sm font-medium text-gray-700 mb-1">
+                パスワード（確認）
+              </label>
+              <PasswordInput
+                {...register('confirmPassword')}
+                id="signup-password-confirm"
+                autoComplete="new-password"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              {errors.confirmPassword && (
+                <p className="text-xs text-red-500 mt-1">{errors.confirmPassword.message}</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary w-full py-3"
+            >
+              {isSubmitting ? '登録中...' : 'アカウント作成'}
+            </button>
+          </form>
+          </>
+        )}
+      </div>
+
+      <p className="mt-6 text-center text-sm text-gray-500">
         すでにアカウントをお持ちの方は{' '}
         <Link href="/login" className="text-green-600 hover:underline font-medium">
           ログイン

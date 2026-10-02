@@ -10,6 +10,7 @@
 // 戻ってきたときにボタンを押し直さなくて済むよう、印をつけておいて自動で続きを実行する。
 
 import { useCallback, useEffect, useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useLiff } from '@/components/LiffProvider'
@@ -36,7 +37,18 @@ function takePending(): boolean {
   }
 }
 
-export default function LineLoginButton() {
+// variant で見た目を変える。
+//   hero   : ログイン画面の主役。区切り線なしで大きく出す
+//   inline : 他の手段の「または」として、控えめに出す
+type Props = {
+  variant?: 'hero' | 'inline'
+  /** ボタンの文字。新規登録画面では「LINEではじめる」などに変える */
+  label?: string
+  /** ボタンの下に出す補足。省略すると variant ごとの既定文が出る */
+  note?: string
+}
+
+export default function LineLoginButton({ variant = 'inline', label, note }: Props) {
   const router = useRouter()
   const { ready } = useLiff()
   const [loading, setLoading] = useState(false)
@@ -124,13 +136,17 @@ export default function LineLoginButton() {
   // LIFFが使えない環境（LIFF ID未設定・初期化失敗）では何も出さない
   if (!ready) return null
 
+  const isHero = variant === 'hero'
+
   return (
-    <div className="mt-5">
-      <div className="mb-4 flex items-center gap-3">
-        <span className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs text-gray-500">または</span>
-        <span className="h-px flex-1 bg-gray-200" />
-      </div>
+    <div className={isHero ? '' : 'mt-5'}>
+      {!isHero && (
+        <div className="mb-4 flex items-center gap-3">
+          <span className="h-px flex-1 bg-gray-200" />
+          <span className="text-xs text-gray-500">または</span>
+          <span className="h-px flex-1 bg-gray-200" />
+        </div>
+      )}
 
       {error && (
         <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
@@ -140,14 +156,28 @@ export default function LineLoginButton() {
         type="button"
         onClick={() => signInWithLine(true)}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#06C755] py-3 text-sm font-bold text-white transition-ui hover:bg-[#05b34c] active:scale-[0.99] disabled:opacity-50"
+        className={`flex w-full items-center justify-center gap-2 bg-[#06C755] font-bold text-white transition-ui hover:bg-[#05b34c] active:scale-[0.99] disabled:opacity-50 ${
+          isHero ? 'rounded-xl py-4 text-base shadow-sm shadow-green-900/10' : 'rounded-lg py-3 text-sm'
+        }`}
       >
-        <span aria-hidden className="text-base leading-none">💬</span>
-        {loading ? 'LINEでログインしています...' : 'LINEでログイン'}
+        {/* LINEのロゴ。背景の角丸はボタンと同じ緑なので、吹き出しだけが浮いて見える */}
+        <Image
+          src="/line-logo.png"
+          alt=""
+          aria-hidden
+          width={isHero ? 26 : 20}
+          height={isHero ? 26 : 20}
+          className="flex-shrink-0"
+          priority={isHero}
+        />
+        {loading ? 'LINEでログインしています...' : (label ?? 'LINEでログイン')}
       </button>
 
-      <p className="mt-2 text-center text-xs text-gray-500">
-        確認メールのやり取りなしでログインできます
+      <p className={`mt-2 text-center text-xs ${isHero ? 'leading-5 text-gray-600' : 'text-gray-500'}`}>
+        {note ??
+          (isHero
+            ? 'はじめての方も、このボタンだけで登録できます（確認メールは不要）'
+            : '確認メールのやり取りなしでログインできます')}
       </p>
     </div>
   )
