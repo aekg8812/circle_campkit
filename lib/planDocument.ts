@@ -32,6 +32,8 @@ export type ScheduleDayColumn = {
 export type PlanDocumentFormValues = {
   created_date: string
   recipient: string
+  /** 計画書に出す場所。空なら計画の「場所エリア」を使う */
+  place: string
   advisor_name: string
   advisor_affiliation: string
   advisor_phone: string

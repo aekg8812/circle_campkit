@@ -498,6 +498,11 @@ export default function DashboardClient({
                     description="学校に出す計画書に、どの項目をどの順で載せるかを決めます。見本で確認しながら変えられます"
                     href={`/groups/${group.id}/document-template`}
                   />
+                  <SettingItem
+                    title="顧問教員"
+                    description="一度登録すると、学校用計画書すべてに自動で入ります。計画書を作るたびに入力しなくて済みます"
+                    href={`/groups/${group.id}/advisor`}
+                  />
                   {isGroupCreator && (
                     <SettingItem
                       title="参加パスワードを変更"

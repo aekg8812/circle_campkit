@@ -46,7 +46,7 @@ export default async function PlanDocumentPage({
       .single(),
     supabase
       .from('groups')
-      .select('id, name, document_template')
+      .select('id, name, document_template, advisor_name, advisor_affiliation, advisor_phone')
       .eq('id', groupId)
       .single(),
     supabase

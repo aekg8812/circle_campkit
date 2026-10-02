@@ -34,7 +34,14 @@ import { toUserMessage } from '@/lib/errorMessage'
 
 type DocumentStep = 'input' | 'preview' | 'submit'
 
-type Group = { id: string; name: string }
+type Group = {
+  id: string
+  name: string
+  // 顧問教員はグループに1つ。計画書ごとに入れ直さなくて済むようにしている
+  advisor_name: string | null
+  advisor_affiliation: string | null
+  advisor_phone: string | null
+}
 
 type Plan = {
   id: string
@@ -69,6 +76,7 @@ type PlanDocumentRow = {
   plan_id: string
   created_date: string | null
   recipient: string | null
+  place: string | null
   advisor_name: string | null
   advisor_affiliation: string | null
   advisor_phone: string | null
@@ -173,9 +181,12 @@ export default function DocumentClient({
   const [form, setForm] = useState<PlanDocumentFormValues>({
     created_date: planDocument?.created_date ?? todayIso(),
     recipient: base?.recipient ?? DEFAULT_RECIPIENT,
-    advisor_name: base?.advisor_name ?? '',
-    advisor_affiliation: base?.advisor_affiliation ?? '',
-    advisor_phone: base?.advisor_phone ?? '',
+    // 場所は計画書に入っていればそれを、無ければ計画の「場所エリア」を初期値にする
+    place: planDocument?.place ?? plan.area ?? '',
+    // 顧問はグループの登録を優先。古い計画書しか無い場合はそれを引き継ぐ
+    advisor_name: group.advisor_name ?? base?.advisor_name ?? '',
+    advisor_affiliation: group.advisor_affiliation ?? base?.advisor_affiliation ?? '',
+    advisor_phone: group.advisor_phone ?? base?.advisor_phone ?? '',
     lodging_name: base?.lodging_name ?? '',
     lodging_address: base?.lodging_address ?? '',
     lodging_phone: base?.lodging_phone ?? '',
@@ -218,7 +229,7 @@ export default function DocumentClient({
       drafterName: creatorProfile?.name ?? '',
       title: plan.title,
       dateRangeLabel: formatMonthDayRange(plan.start_date, plan.end_date),
-      place: plan.area ?? '',
+      place: form.place.trim() || plan.area || '',
       scheduleDays: buildScheduleDays(scheduleItems),
       lodgingLines: buildLodgingLines(form),
       transportLabel:
@@ -255,9 +266,9 @@ export default function DocumentClient({
   // これまで参加者のプロフィールしか見ておらず、顧問教員や宿泊所が
   // 空欄のままでも何も言われなかった。実際にはそちらの方が提出時に困る。
   const missingDocumentFields = [
-    { label: '顧問教員の氏名', filled: form.advisor_name.trim() !== '' },
-    { label: '顧問教員の所属', filled: form.advisor_affiliation.trim() !== '' },
-    { label: '顧問教員のTEL', filled: form.advisor_phone.trim() !== '' },
+    // 顧問はグループ設定に移したので、直す場所が分かるように書いておく
+    { label: '顧問教員（グループ設定）', filled: form.advisor_name.trim() !== '' },
+    { label: '場所', filled: form.place.trim() !== '' },
     { label: '宿泊所の住所', filled: form.lodging_address.trim() !== '' },
     { label: '周辺の病院名', filled: form.hospital_name.trim() !== '' },
     { label: '病院のTEL', filled: form.hospital_phone.trim() !== '' },
@@ -284,6 +295,7 @@ export default function DocumentClient({
         plan_id: plan.id,
         created_date: form.created_date || null,
         recipient: form.recipient || null,
+        place: form.place || null,
         advisor_name: form.advisor_name || null,
         advisor_affiliation: form.advisor_affiliation || null,
         advisor_phone: form.advisor_phone || null,
@@ -518,6 +530,21 @@ export default function DocumentClient({
                 部長が複数いる場合も、ここで誰を代表者にするか選べます。
               </p>
             </Field>
+            {/* 学籍番号などは本人のプロフィールから入る。
+               ここに欄が無い理由が分からないと探してしまうので、出どころを書く。 */}
+            <FixedInfo
+              rows={[
+                { label: '団体名', value: group.name },
+                { label: '氏名', value: documentBase.representative.name },
+                { label: '学籍番号', value: documentBase.representative.studentId },
+                { label: '所属等', value: documentBase.representative.department },
+                { label: 'TEL', value: documentBase.representative.phone },
+                { label: 'E-mail', value: documentBase.representative.email },
+              ]}
+              note="氏名・学籍番号などは、代表者本人のプロフィールから入ります。団体名はグループ設定です。"
+              href="/profile"
+              linkLabel="プロフィールを開く"
+            />
           </FormBlock>
 
           <FormBlock title="基本">
@@ -539,36 +566,37 @@ export default function DocumentClient({
                 disabled={!canEdit}
               />
             </Field>
+            {/* 以前は計画の「場所エリア」をそのまま出すだけで、ここに欄が無く、
+               未入力だと空欄のまま直せなかった */}
+            <Field label="場所">
+              <input
+                value={form.place}
+                onChange={(event) => setField('place', event.target.value)}
+                className={inputClass}
+                placeholder="記入例) 大分県竹田市 久住高原（沢水キャンプ場）"
+                disabled={!canEdit}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                計画の「場所エリア」が初めから入っています。提出用に詳しく書きたいときは、ここで直せます。
+              </p>
+            </Field>
           </FormBlock>
 
+          {/* 顧問は滅多に変わらないので、グループに1つ登録して使い回す。
+             ここでは確認だけにして、毎回の入力をなくしている。 */}
           <FormBlock title="顧問教員">
-            <Field label="氏名">
-              <input
-                value={form.advisor_name}
-                onChange={(event) => setField('advisor_name', event.target.value)}
-                className={inputClass}
-                placeholder="記入例) 山田 太郎"
-                disabled={!canEdit}
-              />
-            </Field>
-            <Field label="所属等">
-              <input
-                value={form.advisor_affiliation}
-                onChange={(event) => setField('advisor_affiliation', event.target.value)}
-                className={inputClass}
-                placeholder="記入例) ○○研究院○○研究系"
-                disabled={!canEdit}
-              />
-            </Field>
-            <Field label="TEL">
-              <input
-                value={form.advisor_phone}
-                onChange={(event) => setField('advisor_phone', event.target.value)}
-                className={inputClass}
-                placeholder="記入例) 050-1234-5678"
-                disabled={!canEdit}
-              />
-            </Field>
+            <FixedInfo
+              rows={[
+                { label: '氏名', value: form.advisor_name },
+                { label: '所属等', value: form.advisor_affiliation },
+                { label: 'TEL', value: form.advisor_phone },
+              ]}
+              note="グループに登録した顧問教員が、すべての計画書に自動で入ります。"
+              href={`/groups/${group.id}/advisor`}
+              linkLabel={
+                form.advisor_name.trim() === '' ? '顧問教員を登録する' : 'グループ設定で変更'
+              }
+            />
           </FormBlock>
 
           {hasSource(templateRows, 'lodging') && (
@@ -992,6 +1020,48 @@ function PreviewModal({
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
         <div className="space-y-6">{children}</div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * 計画書に載るが、この画面では直さない項目。
+ * 「欄が無い＝入力できない」と誤解されないよう、いまの値と直す場所を並べて出す。
+ */
+function FixedInfo({
+  rows,
+  note,
+  href,
+  linkLabel,
+}: {
+  rows: { label: string; value: string }[]
+  note: string
+  href: string
+  linkLabel: string
+}) {
+  return (
+    <div className="rounded-xl bg-gray-50 p-3">
+      <dl className="space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-baseline gap-3 text-sm">
+            <dt className="w-20 flex-shrink-0 text-xs font-medium text-gray-500">{row.label}</dt>
+            <dd
+              className={`min-w-0 flex-1 break-words ${
+                row.value.trim() === '' ? 'text-amber-700' : 'font-semibold text-gray-800'
+              }`}
+            >
+              {row.value.trim() === '' ? '未登録' : row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-2 text-xs leading-5 text-gray-500">{note}</p>
+      <Link
+        href={href}
+        className="mt-2 inline-block text-xs font-bold text-green-700 hover:underline"
+      >
+        {linkLabel} →
+      </Link>
     </div>
   )
 }
