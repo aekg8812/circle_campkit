@@ -74,6 +74,13 @@ type SortKey = 'deadline_asc' | 'created_desc' | 'start_asc' | 'created_asc'
 // 一覧で最初に見せる件数（これを超える分は「すべて表示」で開く）
 const VISIBLE_COUNT = 5
 
+// 役職の並び順。最初の5人に部長・副部長が来るようにして、
+// 人数が多くても「誰に聞けばいいか」がすぐ分かるようにする
+const POSITION_ORDER = ['部長', '副部長', '部員']
+
+// この人数を超えたら、名前で絞り込む欄を出す
+const MEMBER_SEARCH_THRESHOLD = 10
+
 const sortOptions: { value: SortKey; label: string }[] = [
   { value: 'deadline_asc', label: '締切が近い順' },
   { value: 'created_desc', label: '作成が新しい順' },
@@ -205,6 +212,7 @@ export default function DashboardClient({
   // ページの中にスクロール領域を作ると、スマホで「どちらが動くか」が
   // 指の位置で変わってしまい、操作しづらくなるため。
   const [showAllMembers, setShowAllMembers] = useState(false)
+  const [memberQuery, setMemberQuery] = useState('')
   const [showAllPlans, setShowAllPlans] = useState(false)
 
   // どのモーダルも Escape で閉じられるようにする
@@ -293,13 +301,25 @@ export default function DashboardClient({
   const nameByUserId = new Map(
     members.map((member) => [member.user_id, member.profiles?.name ?? '名前未設定'])
   )
-  const plansByCreator = new Map<string, Plan[]>()
-  for (const plan of plans) {
-    if (!plan.creator_id) continue
-    const list = plansByCreator.get(plan.creator_id) ?? []
-    list.push(plan)
-    plansByCreator.set(plan.creator_id, list)
-  }
+  // 役職 → 名前 の順に並べる。入った順のままだと、部長がどこにいるか分からない
+  const sortedMembers = [...members]
+    .sort((a, b) => {
+      const byPosition =
+        POSITION_ORDER.indexOf(a.position) - POSITION_ORDER.indexOf(b.position)
+      if (byPosition !== 0) return byPosition
+      return (a.profiles?.name ?? '').localeCompare(b.profiles?.name ?? '', 'ja')
+    })
+    .filter((member) => {
+      const query = memberQuery.trim()
+      if (query === '') return true
+      return (member.profiles?.name ?? '').includes(query)
+    })
+
+  // 絞り込み中は、探している人が隠れないよう全員出す
+  const visibleMembers =
+    showAllMembers || memberQuery.trim() !== ''
+      ? sortedMembers
+      : sortedMembers.slice(0, VISIBLE_COUNT)
 
   const changePassword = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -545,66 +565,73 @@ export default function DashboardClient({
 
       {/* メンバー一覧 */}
       <section>
-        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-          メンバー（{members.length}人）
-        </h2>
-        <div className="reveal-stagger divide-y divide-gray-100 rounded-2xl bg-white shadow-sm">
-          {(showAllMembers ? members : members.slice(0, VISIBLE_COUNT)).map((m) => {
-            const proposed = plansByCreator.get(m.user_id) ?? []
-            return (
-              <div key={m.id} className="flex items-start gap-3 px-4 py-3">
-                <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200">
-                  {m.profiles?.avatar_url ? (
-                    <Image
-                      src={m.profiles.avatar_url}
-                      alt={m.profiles.name}
-                      width={36}
-                      height={36}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-base text-gray-500">&#128100;</span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-800">
-                    {m.profiles?.name ?? '（名前未設定）'}
-                    {m.user_id === currentUserId && (
-                      <span className="ml-1 text-xs font-normal text-green-600">（あなた）</span>
-                    )}
-                  </p>
-                  {m.profiles?.grade != null && (
-                    <p className="text-xs text-gray-500">{m.profiles.grade}年生</p>
-                  )}
-                  {proposed.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      <span className="text-xs text-gray-500">起案:</span>
-                      {proposed.map((plan) => (
-                        <Link
-                          key={plan.id}
-                          href={`/groups/${group.id}/plans/${plan.id}`}
-                          className="inline-flex max-w-[10rem] items-center gap-1 truncate rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 transition-ui hover:bg-green-100"
-                        >
-                          {plan.title}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <span className="flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                  {m.position}
-                </span>
-              </div>
-            )
-          })}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+            メンバー（{members.length}人）
+          </h2>
+          {/* 人数が多いと、目で探すのが大変になる。多いときだけ名前で絞れるようにする */}
+          {members.length > MEMBER_SEARCH_THRESHOLD && (
+            <input
+              type="search"
+              value={memberQuery}
+              onChange={(event) => setMemberQuery(event.target.value)}
+              placeholder="名前で絞り込む"
+              aria-label="メンバーを名前で絞り込む"
+              className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          )}
         </div>
-        {members.length > VISIBLE_COUNT && !showAllMembers && (
+        <div className="reveal-stagger divide-y divide-gray-100 rounded-2xl bg-white shadow-sm">
+          {visibleMembers.map((m) => (
+            <div key={m.id} className="flex items-start gap-3 px-4 py-3">
+              <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200">
+                {m.profiles?.avatar_url ? (
+                  <Image
+                    src={m.profiles.avatar_url}
+                    alt={m.profiles.name}
+                    width={36}
+                    height={36}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-base text-gray-500">&#128100;</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-gray-800">
+                  {m.profiles?.name ?? '（名前未設定）'}
+                  {m.user_id === currentUserId && (
+                    <span className="ml-1 text-xs font-normal text-green-600">（あなた）</span>
+                  )}
+                </p>
+                {m.profiles?.grade != null && (
+                  <p className="text-xs text-gray-500">{m.profiles.grade}年生</p>
+                )}
+              </div>
+              <span className="flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                {m.position}
+              </span>
+            </div>
+          ))}
+          {visibleMembers.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-gray-500">
+              「{memberQuery}」に一致するメンバーはいません
+            </p>
+          )}
+        </div>
+
+        {/* 人数が多いときだけ、全部開くか畳むかを選べるようにする。
+           入れ子のスクロール枠にはしない（スマホでどちらが動くか分からず、
+           スクロールバーも出ないので「まだ下にある」ことに気づけないため）。 */}
+        {sortedMembers.length > VISIBLE_COUNT && (
           <button
             type="button"
-            onClick={() => setShowAllMembers(true)}
+            onClick={() => setShowAllMembers((current) => !current)}
             className="pressable mt-2 w-full rounded-xl border border-gray-200 bg-white py-2.5 text-xs font-semibold text-gray-600 hover:border-green-400 hover:text-green-700"
           >
-            すべて表示（{members.length}人）
+            {showAllMembers
+              ? '折りたたむ'
+              : `すべて表示（残り${sortedMembers.length - VISIBLE_COUNT}人）`}
           </button>
         )}
       </section>
