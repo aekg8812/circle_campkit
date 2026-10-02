@@ -1,6 +1,6 @@
 import { Skeleton } from '@/components/Skeleton'
 
-// 計画の基本情報を編集する画面の読み込み中に出すスケルトン
+// 計画（基本情報・行程表・募集設定）を編集する画面の読み込み中に出すスケルトン
 export default function EditPlanLoading() {
   return (
     <div className="space-y-4">

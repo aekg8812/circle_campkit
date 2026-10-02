@@ -33,7 +33,7 @@ export default async function EditPlanPage({
       .single(),
     supabase
       .from('plans')
-      .select('id, group_id, creator_id, title, category, start_date, end_date, area, description, budget_per_person')
+      .select('id, group_id, creator_id, title, category, start_date, end_date, area, description, budget_per_person, default_transport')
       .eq('id', planId)
       .eq('group_id', groupId)
       .single(),
@@ -52,5 +52,28 @@ export default async function EditPlanPage({
     redirect(`/groups/${groupId}/plans/${planId}`)
   }
 
-  return <EditPlanClient group={group} plan={plan} />
+  // 行程表と募集設定も、この画面でまとめて編集する
+  const [{ data: scheduleItems }, { data: recruitment }] = await Promise.all([
+    supabase
+      .from('schedule_items')
+      .select('id, day, time, sort_order, time_label, location_name, note, transport')
+      .eq('plan_id', planId)
+      .order('day', { ascending: true, nullsFirst: false })
+      .order('time', { ascending: true, nullsFirst: false })
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('recruitments')
+      .select('id, type, capacity, deadline, is_closed')
+      .eq('plan_id', planId)
+      .maybeSingle(),
+  ])
+
+  return (
+    <EditPlanClient
+      group={group}
+      plan={plan}
+      scheduleItems={scheduleItems ?? []}
+      recruitment={recruitment}
+    />
+  )
 }
