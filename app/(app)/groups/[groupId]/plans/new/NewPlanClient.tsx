@@ -270,7 +270,7 @@ export default function NewPlanClient({ group, currentUserId, groupTemplates }: 
         )
       )
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : '下書きの作成に失敗しました')
+      setAiError(toUserMessage(error, '下書きを作れませんでした。通信を確認してもう一度お試しください。'))
     }
     setAiLoading(false)
   }

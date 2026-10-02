@@ -6,18 +6,19 @@
 // 利用者には意味が分からず、開発者にしか価値がない情報なので、
 // ここで人が読める日本語に置き換える。詳細はコンソールに残す。
 
-type ErrorLike = { message?: unknown; code?: unknown } | null | undefined
+// catch で受け取る値は unknown なので、何が来ても受けられるようにしておく
+type ErrorLike = unknown
 
 function readMessage(error: ErrorLike): string {
-  if (!error) return ''
-  if (typeof error.message === 'string') return error.message
-  return ''
+  if (typeof error !== 'object' || error === null) return ''
+  const message = (error as { message?: unknown }).message
+  return typeof message === 'string' ? message : ''
 }
 
 function readCode(error: ErrorLike): string {
-  if (!error) return ''
-  if (typeof error.code === 'string') return error.code
-  return ''
+  if (typeof error !== 'object' || error === null) return ''
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' ? code : ''
 }
 
 /**
