@@ -7,7 +7,9 @@ import {
   countNights,
   createAiClient,
   describeSeason,
+  generateWithRetry,
   parseJsonResponse,
+  toAiErrorMessage,
 } from '@/lib/ai/client'
 import { normalizeScheduleRows } from '@/lib/ai/schedule'
 import { PLAN_TEMPLATES } from '@/lib/planTemplates'
@@ -205,36 +207,38 @@ ${buildPastReference(pastPlans)}`)
 
   try {
     const ai = createAiClient()
-    const response = await ai.models.generateContent({
-      model: AI_MODEL,
-      contents: sections.join('\n\n'),
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            rows: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  dayOffset: { type: Type.INTEGER },
-                  time: { type: Type.STRING },
-                  timeLabel: { type: Type.STRING },
-                  locationName: { type: Type.STRING },
-                  note: { type: Type.STRING },
+    const response = await generateWithRetry(() =>
+      ai.models.generateContent({
+        model: AI_MODEL,
+        contents: sections.join('\n\n'),
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              rows: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    dayOffset: { type: Type.INTEGER },
+                    time: { type: Type.STRING },
+                    timeLabel: { type: Type.STRING },
+                    locationName: { type: Type.STRING },
+                    note: { type: Type.STRING },
+                  },
+                  required: ['dayOffset', 'time', 'timeLabel', 'locationName', 'note'],
                 },
-                required: ['dayOffset', 'time', 'timeLabel', 'locationName', 'note'],
               },
             },
+            required: ['rows'],
           },
-          required: ['rows'],
+          maxOutputTokens: 2048,
+          temperature: 0.4,
         },
-        maxOutputTokens: 2048,
-        temperature: 0.4,
-      },
-    })
+      })
+    )
 
     const raw = parseJsonResponse(response.text) as { rows?: unknown } | null
     const rows = normalizeScheduleRows(raw?.rows, nights)
@@ -245,7 +249,7 @@ ${buildPastReference(pastPlans)}`)
 
     return NextResponse.json({ rows })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'AIの呼び出しに失敗しました'
-    return NextResponse.json({ error: message }, { status: 500 })
+    // Gemini のエラー本文はJSONのまま返ってくるので、そのまま画面に出さない
+    return NextResponse.json({ error: toAiErrorMessage(error) }, { status: 502 })
   }
 }

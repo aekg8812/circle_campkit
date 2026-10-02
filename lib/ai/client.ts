@@ -51,3 +51,75 @@ export function countNights(
   const diff = Math.round((end.getTime() - start.getTime()) / 86400000)
   return diff > 0 ? diff : 0
 }
+
+// --- エラーの扱い -------------------------------------------------
+//
+// Gemini のエラーは、本文がそのまま JSON の文字列になっていることがある。
+// 例: {"error":{"code":503,"message":"This model is currently experiencing
+//      high demand...","status":"UNAVAILABLE"}}
+// これをそのまま画面に出すと、利用者には何のことか分からない。
+// 原文はサーバーのログにだけ残し、画面には日本語の案内だけを返す。
+
+/** エラーからHTTPステータスらしき数字を取り出す */
+function extractStatusCode(error: unknown): number | null {
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as { status?: unknown; code?: unknown }
+    if (typeof candidate.status === 'number') return candidate.status
+    if (typeof candidate.code === 'number') return candidate.code
+  }
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const inJson = message.match(/"code"\s*:\s*(\d{3})/)
+  if (inJson) return Number(inJson[1])
+  const inText = message.match(/\b(400|401|403|404|429|500|502|503|504)\b/)
+  return inText ? Number(inText[1]) : null
+}
+
+/** 混み合い・一時的な不具合など、少し待てば直る見込みのあるもの */
+function isTemporary(code: number | null): boolean {
+  return code === 500 || code === 502 || code === 503 || code === 504
+}
+
+/** 画面に出す日本語の案内にする。原文はログにだけ残す */
+export function toAiErrorMessage(error: unknown): string {
+  console.error('[ai] 呼び出しに失敗:', error)
+
+  // 設定漏れは、こちらで出している日本語メッセージなのでそのまま使う
+  if (error instanceof Error && error.message.includes('GEMINI_API_KEY')) {
+    return error.message
+  }
+
+  const code = extractStatusCode(error)
+  if (isTemporary(code)) {
+    return 'AIが混み合っています。少し待ってから、もう一度お試しください。'
+  }
+  if (code === 429) {
+    return 'AIの利用が上限に達しました。時間をおいてから、もう一度お試しください。'
+  }
+  if (code === 401 || code === 403) {
+    return 'AI機能の設定に問題があります。管理者に連絡してください。'
+  }
+  if (code === 400) {
+    return 'AIに渡す内容に問題がありました。計画の入力を見直してから、もう一度お試しください。'
+  }
+  return 'AIを呼び出せませんでした。時間をおいて、もう一度お試しください。'
+}
+
+/**
+ * 混み合いで失敗したときだけ、少し待って呼び直す。
+ * 「Spikes in demand are usually temporary」と案内されるとおり、
+ * 1〜2秒おいて再送すれば通ることが多いため。
+ * 利用上限(429)は待っても変わらないので、繰り返さない。
+ */
+export async function generateWithRetry<T>(run: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await run()
+    } catch (error) {
+      lastError = error
+      if (attempt === attempts - 1 || !isTemporary(extractStatusCode(error))) break
+      await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)))
+    }
+  }
+  throw lastError
+}

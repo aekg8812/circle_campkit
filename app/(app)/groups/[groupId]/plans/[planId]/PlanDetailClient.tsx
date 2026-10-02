@@ -879,12 +879,16 @@ export default function PlanDetailClient({
         />
       )}
 
-      {/* 起案者だけが使う操作をまとめる。
-         参加するだけの人にとっては全部ノイズなので、既定では畳んでおく。 */}
+      {/* 中身は計画の削除だけ。以前は「この計画を管理」という名前で、
+         中に何があるのか開くまで分からなかったので、そのまま名前にした。
+         取り消せない操作なので、既定では畳んでおく。 */}
       {isCreator && (
         <details className="group rounded-2xl bg-white p-4 shadow-sm">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-bold text-gray-700">
-            <span>⚙️ この計画を管理</span>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+            <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="text-sm font-bold text-gray-700">この計画を削除する</span>
+              <span className="text-xs font-normal text-gray-500">起案者だけに見えます</span>
+            </span>
             <span aria-hidden className="text-gray-400 transition-ui group-open:rotate-90">
               ›
             </span>
@@ -892,9 +896,10 @@ export default function PlanDetailClient({
 
           <div className="mt-4">
             <div>
-              <p className="text-sm font-bold text-gray-700">計画の削除</p>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="text-xs leading-5 text-gray-500">
                 行程・募集・参加者・提出書類がすべて削除されます。元に戻せません。
+                <br />
+                内容を直したいだけなら、上の「✏️ 計画を編集」を使ってください。
               </p>
               <button
                 type="button"
@@ -1455,7 +1460,7 @@ function PreparationSection({
         setCheckResult(result)
       }
     } catch (error) {
-      setCheckError(error instanceof Error ? error.message : '点検に失敗しました')
+      setCheckError(toUserMessage(error, '点検に失敗しました。通信を確認してもう一度お試しください。'))
     }
     setChecking(false)
   }

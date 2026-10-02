@@ -7,7 +7,9 @@ import {
   countNights,
   createAiClient,
   describeSeason,
+  generateWithRetry,
   parseJsonResponse,
+  toAiErrorMessage,
 } from '@/lib/ai/client'
 import { formatGearBaseline } from '@/lib/ai/gearBaseline'
 
@@ -123,41 +125,43 @@ export async function POST(request: NextRequest) {
 
   try {
     const ai = createAiClient()
-    const response = await ai.models.generateContent({
-      model: AI_MODEL,
-      contents: `# 今回の計画
+    const response = await generateWithRetry(() =>
+      ai.models.generateContent({
+        model: AI_MODEL,
+        contents: `# 今回の計画
 ${details}
 
 # 基本装備の目安（このサークルの案内）
 ${formatGearBaseline()}
 
 上記をふまえて、足りない持ち物を点検してください。`,
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            summary: { type: Type.STRING },
-            findings: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  severity: { type: Type.STRING, enum: ['warning', 'info'] },
-                  title: { type: Type.STRING },
-                  detail: { type: Type.STRING },
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              findings: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    severity: { type: Type.STRING, enum: ['warning', 'info'] },
+                    title: { type: Type.STRING },
+                    detail: { type: Type.STRING },
+                  },
+                  required: ['severity', 'title', 'detail'],
                 },
-                required: ['severity', 'title', 'detail'],
               },
             },
+            required: ['summary', 'findings'],
           },
-          required: ['summary', 'findings'],
+          maxOutputTokens: 2048,
+          temperature: 0.3,
         },
-        maxOutputTokens: 2048,
-        temperature: 0.3,
-      },
-    })
+      })
+    )
 
     const parsedResult = resultSchema.safeParse(parseJsonResponse(response.text))
     if (!parsedResult.success) {
@@ -166,7 +170,7 @@ ${formatGearBaseline()}
 
     return NextResponse.json(parsedResult.data)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'AIの呼び出しに失敗しました'
-    return NextResponse.json({ error: message }, { status: 500 })
+    // Gemini のエラー本文はJSONのまま返ってくるので、そのまま画面に出さない
+    return NextResponse.json({ error: toAiErrorMessage(error) }, { status: 502 })
   }
 }
