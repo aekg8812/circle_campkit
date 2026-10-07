@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardClient from './DashboardClient'
+import { needsSubmission } from '@/lib/submissionRequirement'
 
 // タブ・履歴・共有時のプレビューでグループを見分けられるようにする
 export async function generateMetadata({
@@ -75,7 +76,7 @@ export default async function GroupDashboardPage({
 
   // 締切状況・定員状況の表示に使う募集情報と参加人数
   const planIds = (plans ?? []).map((plan) => plan.id)
-  const [{ data: recruitments }, { data: participantRows }] =
+  const [{ data: recruitments }, { data: participantRows }, { data: documentRows }] =
     planIds.length > 0
       ? await Promise.all([
           supabase
@@ -83,8 +84,21 @@ export default async function GroupDashboardPage({
             .select('plan_id, deadline, capacity, is_closed')
             .in('plan_id', planIds),
           supabase.from('participants').select('plan_id, user_id, status').in('plan_id', planIds),
+          // 学校への計画書を提出済みか（提出期限のバッジに使う）
+          supabase
+            .from('plan_documents')
+            .select('plan_id, submitted_at, activity_location, activity_kind')
+            .in('plan_id', planIds),
         ])
-      : [{ data: [] }, { data: [] }]
+      : [{ data: [] }, { data: [] }, { data: [] }]
+
+  const submittedAtByPlan: Record<string, string | null> = Object.fromEntries(
+    (documentRows ?? []).map((row) => [row.plan_id, row.submitted_at])
+  )
+  // 「提出不要」と答えた計画には、提出期限のバッジを出さない
+  const noSubmissionPlanIds = (documentRows ?? [])
+    .filter((row) => !needsSubmission(row.activity_location, row.activity_kind))
+    .map((row) => row.plan_id)
 
   // 定員の判定は「参加」の人だけで数える（未定は枠を埋めない）
   const participantCounts: Record<string, number> = {}
@@ -115,6 +129,8 @@ export default async function GroupDashboardPage({
       recruitmentByPlan={recruitmentByPlan}
       participantCounts={participantCounts}
       myParticipantStatus={myParticipantStatus}
+      submittedAtByPlan={submittedAtByPlan}
+      noSubmissionPlanIds={noSubmissionPlanIds}
       currentUserId={user.id}
     />
   )

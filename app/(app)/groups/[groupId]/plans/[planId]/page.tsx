@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PlanDetailClient from './PlanDetailClient'
+import { LEADER_POSITION } from '@/lib/profileCompleteness'
+import { needsSubmission } from '@/lib/submissionRequirement'
 
 export async function generateMetadata({
   params,
@@ -62,7 +64,7 @@ export default async function PlanDetailPage({
       .eq('group_id', groupId),
     supabase
       .from('profiles')
-      .select('student_id, grade, department, phone, school_email, academic_advisor')
+      .select('student_id, grade, department, phone, school_email')
       .eq('id', user.id)
       .single(),
   ])
@@ -83,6 +85,7 @@ export default async function PlanDetailPage({
     { data: preparations },
     { data: myGear },
     { data: myCars },
+    { data: planDocument },
   ] = await Promise.all([
     supabase
       .from('schedule_items')
@@ -98,7 +101,7 @@ export default async function PlanDetailPage({
       .maybeSingle(),
     supabase
       .from('participants')
-      .select('id, user_id, joined_at, status, paid_at, profiles(name, avatar_url, grade)')
+      .select('id, user_id, joined_at, status, paid_at, brings_car, profiles(name, avatar_url, grade)')
       .eq('plan_id', planId)
       .order('joined_at', { ascending: true }),
     supabase
@@ -121,6 +124,12 @@ export default async function PlanDetailPage({
       .select('id, name, capacity')
       .eq('owner_id', user.id)
       .order('created_at', { ascending: false }),
+    // 学生係へ提出済みか・そもそも提出が要るか（提出期限のお知らせに使う）
+    supabase
+      .from('plan_documents')
+      .select('submitted_at, activity_location, activity_kind')
+      .eq('plan_id', planId)
+      .maybeSingle(),
   ])
 
   const normalizedReviews = (reviews ?? []).map((review) => ({
@@ -162,6 +171,12 @@ export default async function PlanDetailPage({
       myCars={myCars ?? []}
       currentUserId={user.id}
       currentUserProfile={currentUserProfile}
+      isLeader={memberPositions.get(user.id) === LEADER_POSITION}
+      documentSubmittedAt={planDocument?.submitted_at ?? null}
+      documentRequired={needsSubmission(
+        planDocument?.activity_location,
+        planDocument?.activity_kind
+      )}
     />
   )
 }

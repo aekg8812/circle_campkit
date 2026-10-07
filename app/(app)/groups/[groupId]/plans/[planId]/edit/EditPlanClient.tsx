@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
 import { toUserMessage } from '@/lib/errorMessage'
 import { dayBeforeDeadline, diffInDays, isDeadlineTooLate, shiftIsoDate } from '@/lib/dateShift'
+import SubmissionPlanningHint from '@/components/SubmissionPlanningHint'
 
 type Group = { id: string; name: string }
 
@@ -661,6 +662,15 @@ export default function EditPlanClient({ group, plan, scheduleItems, recruitment
                 />
                 募集を締め切る
               </label>
+            </div>
+          )}
+          {/* 学校への計画書の提出期限。募集締切はこれより前にする必要がある */}
+          {basic.start_date && (
+            <div className="mt-3">
+              <SubmissionPlanningHint
+                startDate={basic.start_date}
+                recruitDeadline={recruit.enabled ? recruit.deadline : ''}
+              />
             </div>
           )}
         </section>

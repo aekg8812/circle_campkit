@@ -9,6 +9,7 @@ import { createGoogleMapsSearchUrl } from '@/lib/maps'
 import { formatJpDate, formatJpDateRange, formatJpDateTime } from '@/lib/formatDate'
 import { pickMeetingItem } from '@/lib/meetingPoint'
 import MeetingCard from '@/components/MeetingCard'
+import SubmissionDeadlineNotice from '@/components/SubmissionDeadlineNotice'
 import FirstTimeNote from '@/components/FirstTimeNote'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { useDialogDismiss } from '@/components/useDialogDismiss'
@@ -77,6 +78,8 @@ type Participant = {
   status: string | null
   /** 集金が済んだ日時。null は未払い */
   paid_at: string | null
+  /** 車を出せるか。null は未回答（計画書の「入構車両」に使う） */
+  brings_car: boolean | null
   profiles: {
     name: string
     avatar_url: string | null
@@ -124,6 +127,12 @@ type Props = {
   myCars: CarItem[]
   currentUserId: string
   currentUserProfile: ProfileLike | null
+  /** 自分がこのグループの部長か（計画書の責任者になる） */
+  isLeader: boolean
+  /** 計画書を学生係へ提出した日時。null は未提出 */
+  documentSubmittedAt: string | null
+  /** 学生係への提出が要るか（「提出不要」と答えた計画では false） */
+  documentRequired: boolean
 }
 
 /** 車の表示名（例: プリウス（5人乗り）） */
@@ -150,13 +159,24 @@ export default function PlanDetailClient({
   myCars,
   currentUserId,
   currentUserProfile,
+  isLeader,
+  documentSubmittedAt,
+  documentRequired,
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
   const confirm = useConfirm()
   const isCreator = plan.creator_id === currentUserId
-  const missingProfileFields = getMissingDocumentFields(currentUserProfile)
+  // 名簿に載る項目は必須。そろうまで参加できない（部長は TEL・Mail も）
+  const missingProfileFields = getMissingDocumentFields(currentUserProfile, { isLeader })
+  // 参加するときに「車を出せるか」を聞くダイアログ。開いている間は参加の種類を持つ
+  const [pendingJoinStatus, setPendingJoinStatus] = useState<'going' | 'maybe' | null>(null)
+  const closeCarDialog = useCallback(() => setPendingJoinStatus(null), [])
+  useDialogDismiss(closeCarDialog, pendingJoinStatus != null)
+  // 直前に答えた「車を出せるか」。出せない人には車の選択を出さない
+  const [joinedWithCar, setJoinedWithCar] = useState(false)
+  const modalCars = joinedWithCar ? myCars : []
   // 参加直後に持ち物・車を登録してもらうモーダル
   const [showPrepModal, setShowPrepModal] = useState(false)
   const closePrepModal = useCallback(() => setShowPrepModal(false), [])
@@ -240,20 +260,31 @@ export default function PlanDetailClient({
 
 
   const joinPlan = async (status: 'going' | 'maybe' = 'going') => {
-    // プロフィール未入力があれば、名簿が空欄になる旨を伝えてから参加させる
+    // 名簿に載る項目がそろっていないと計画書が出せないので、先に入力してもらう
     if (missingProfileFields.length > 0) {
       const labels = missingProfileFields.map((field) => field.label).join('・')
       if (
-        !(await confirm({
-          title: 'プロフィールに未入力があります',
-          message: `未入力：${labels}\n\nこのまま参加すると、計画書の名簿でこれらが空欄になります。`,
-          confirmLabel: 'このまま参加する',
-        }))
+        await confirm({
+          title: 'プロフィールを入力してください',
+          message: `未入力：${labels}\n\n計画書の参加者名簿に載るため、入力がそろうと参加できます。`,
+          confirmLabel: 'プロフィールを開く',
+          cancelLabel: 'あとで',
+        })
       ) {
-        return
+        router.push('/profile')
       }
+      return
     }
 
+    // 計画書の「入構車両」の台数に使うので、参加するときに必ず答えてもらう
+    setPendingJoinStatus(status)
+  }
+
+  /** 車を出せるかの答えを受けて、参加登録する */
+  const confirmJoin = async (bringsCar: boolean) => {
+    const status = pendingJoinStatus
+    if (!status) return
+    setPendingJoinStatus(null)
     setServerError(null)
     setSubmitting('participant')
 
@@ -261,6 +292,7 @@ export default function PlanDetailClient({
       plan_id: plan.id,
       user_id: currentUserId,
       status,
+      brings_car: bringsCar,
     })
 
     if (error) {
@@ -270,10 +302,33 @@ export default function PlanDetailClient({
     }
 
     // 参加したら、持っていく道具・出せる車の登録をその場でお願いする
+    setJoinedWithCar(bringsCar)
     setSelectedGearIds([])
     setSelectedCarIds([])
     setShowPrepModal(true)
 
+    refreshAfterMutation()
+    setSubmitting(null)
+  }
+
+  /** 参加したあとで「車を出せるか」を答える・変える */
+  const changeMyCar = async (bringsCar: boolean) => {
+    if (!myParticipant) return
+    setServerError(null)
+    setSubmitting('participant')
+
+    const { error } = await supabase
+      .from('participants')
+      .update({ brings_car: bringsCar })
+      .eq('id', myParticipant.id)
+
+    if (error) {
+      setServerError(toUserMessage(error, '変更できませんでした。'))
+      setSubmitting(null)
+      return
+    }
+
+    toast(bringsCar ? '「車を出せる」にしました' : '「車は出せない」にしました')
     refreshAfterMutation()
     setSubmitting(null)
   }
@@ -769,6 +824,17 @@ export default function PlanDetailClient({
           </p>
         )}
 
+        {/* 計画書の提出期限（実施日の7営業日前）。出す役目の起案者・部長にだけ見せる */}
+        {(isCreator || isLeader) && phase !== 'past' && documentRequired && (
+          <div className="mb-4">
+            <SubmissionDeadlineNotice
+              startDate={plan.start_date}
+              submittedAt={documentSubmittedAt}
+              href={`/groups/${group.id}/plans/${plan.id}/document`}
+            />
+          </div>
+        )}
+
         {isCreator && (
           <StatusManager
             phase={phase}
@@ -853,6 +919,7 @@ export default function PlanDetailClient({
         onJoin={joinPlan}
         onLeave={leavePlan}
         onChangeStatus={changeMyStatus}
+        onChangeCar={changeMyCar}
         onTogglePaid={togglePaid}
         goingCount={goingParticipants.length}
         maybeCount={maybeParticipants.length}
@@ -917,6 +984,50 @@ export default function PlanDetailClient({
         </details>
       )}
 
+      {/* 参加するとき: 車を出せるかを必ず聞く（計画書の「入構車両」の台数になる） */}
+      {pendingJoinStatus && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="車を出せるか"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="flex items-center gap-2 text-base font-bold text-gray-800">
+              <Car size={18} aria-hidden />
+              車を出せますか？
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              大学に集合するため、学校に出す計画書に「入構車両」の台数を書きます。
+              計画書は早めに出す必要があるので、参加するときに答えてください（あとから変更もできます）。
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => confirmJoin(true)}
+                className="btn-primary py-3"
+              >
+                出せる
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmJoin(false)}
+                className="btn-secondary py-3"
+              >
+                出せない
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={closeCarDialog}
+              className="mt-3 w-full text-center text-xs font-semibold text-gray-500 hover:underline"
+            >
+              参加をやめる
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 参加直後: 持っていく道具・出せる車を登録してもらう（なければ「なし」） */}
       {showPrepModal && (
         <div
@@ -931,7 +1042,7 @@ export default function PlanDetailClient({
               持っていく道具と出せる車を選ぶと、みんなに共有され、かぶりや不足を防げます。
             </p>
 
-            {myGear.length === 0 && myCars.length === 0 ? (
+            {myGear.length === 0 && modalCars.length === 0 ? (
               <div className="mt-4 rounded-xl bg-gray-50 p-4 text-center">
                 <p className="text-sm text-gray-600">
                   プロフィールに道具・車が登録されていません。
@@ -973,11 +1084,11 @@ export default function PlanDetailClient({
                   </div>
                 )}
 
-                {myCars.length > 0 && (
+                {modalCars.length > 0 && (
                   <div>
                     <p className="mb-1.5 text-xs font-bold text-gray-600">出せる車</p>
                     <div className="space-y-1">
-                      {myCars.map((car) => (
+                      {modalCars.map((car) => (
                         <label
                           key={car.id}
                           className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
@@ -1004,7 +1115,7 @@ export default function PlanDetailClient({
             )}
 
             <div className="mt-5 space-y-2">
-              {(myGear.length > 0 || myCars.length > 0) && (
+              {(myGear.length > 0 || modalCars.length > 0) && (
                 <button
                   type="button"
                   onClick={() => savePostJoinPreparations(false)}
@@ -1175,6 +1286,7 @@ function RecruitmentSection({
   onJoin,
   onLeave,
   onChangeStatus,
+  onChangeCar,
   onTogglePaid,
   goingCount,
   maybeCount,
@@ -1195,6 +1307,7 @@ function RecruitmentSection({
   onJoin: (status?: 'going' | 'maybe') => void
   onLeave: () => void
   onChangeStatus: (status: 'going' | 'maybe') => void
+  onChangeCar: (bringsCar: boolean) => void
   onTogglePaid: (participant: Participant) => void
   goingCount: number
   maybeCount: number
@@ -1207,7 +1320,12 @@ function RecruitmentSection({
     (recruitment?.capacity != null ? `${goingCount} / ${recruitment.capacity}人` : `${goingCount}人`) +
     (maybeCount > 0 ? `（未定 ${maybeCount}人）` : '')
 
-  const myStatus = participants.find((participant) => participant.user_id === currentUserId)?.status ?? 'going'
+  const myParticipant = participants.find((participant) => participant.user_id === currentUserId)
+  const myStatus = myParticipant?.status ?? 'going'
+  // 車を出せる人の数（計画書の「入構車両」）。未定の人は計画書に載らないので数えない
+  const goingList = participants.filter((participant) => (participant.status ?? 'going') === 'going')
+  const carCount = goingList.filter((participant) => participant.brings_car === true).length
+  const carUnansweredCount = goingList.filter((participant) => participant.brings_car == null).length
   const unpaidCount = participants.filter(
     (participant) => (participant.status ?? 'going') === 'going' && participant.paid_at == null
   ).length
@@ -1231,7 +1349,65 @@ function RecruitmentSection({
           {recruitment?.deadline != null && (
             <DetailItem label="締切" value={formatJpDateTime(recruitment.deadline)} />
           )}
+          <DetailItem
+            label="車を出せる人"
+            value={`${carCount}人` + (carUnansweredCount > 0 ? `（未回答 ${carUnansweredCount}人）` : '')}
+          />
         </div>
+
+        {/* 自分の「車を出せるか」。未回答なら目立たせて答えてもらう */}
+        {isParticipating && (
+          <div
+            className={`rounded-lg border px-4 py-3 ${
+              myParticipant?.brings_car == null
+                ? 'border-amber-200 bg-amber-50'
+                : 'border-gray-200 bg-white'
+            }`}
+          >
+            <p
+              className={`text-sm font-semibold ${
+                myParticipant?.brings_car == null ? 'text-amber-800' : 'text-gray-700'
+              }`}
+            >
+              {myParticipant?.brings_car == null
+                ? '車を出せるか、まだ答えていません'
+                : myParticipant.brings_car
+                  ? 'あなたは車を出せると答えています'
+                  : 'あなたは車を出せないと答えています'}
+            </p>
+            {myParticipant?.brings_car == null && (
+              <p className="mt-0.5 text-xs leading-5 text-amber-700">
+                学校に出す計画書の「入構車両」の台数になります。募集の締切までに答えてください。
+              </p>
+            )}
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => onChangeCar(true)}
+                disabled={submitting === 'participant' || myParticipant?.brings_car === true}
+                className={`pressable rounded-lg px-3 py-1.5 text-xs font-bold disabled:cursor-default ${
+                  myParticipant?.brings_car === true
+                    ? 'bg-green-600 text-white'
+                    : 'border border-gray-300 text-gray-600 hover:border-green-400'
+                }`}
+              >
+                出せる
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangeCar(false)}
+                disabled={submitting === 'participant' || myParticipant?.brings_car === false}
+                className={`pressable rounded-lg px-3 py-1.5 text-xs font-bold disabled:cursor-default ${
+                  myParticipant?.brings_car === false
+                    ? 'bg-gray-700 text-white'
+                    : 'border border-gray-300 text-gray-600 hover:border-gray-400'
+                }`}
+              >
+                出せない
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-lg bg-gray-50 px-4 py-3">
           <p className="text-sm font-semibold text-gray-800">
@@ -1279,6 +1455,17 @@ function RecruitmentSection({
                       {(participant.status ?? 'going') === 'maybe' && (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
                           未定
+                        </span>
+                      )}
+                      {participant.brings_car === true && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700">
+                          <Car size={12} aria-hidden />
+                          車を出す
+                        </span>
+                      )}
+                      {participant.brings_car == null && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                          車：未回答
                         </span>
                       )}
                     </p>
@@ -1330,7 +1517,7 @@ function RecruitmentSection({
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
             プロフィールの未入力があります（
             {missingProfileFields.map((field) => field.label).join('・')}）。
-            参加すると計画書の名簿に載りますが、これらの欄は空欄になります。
+            計画書の参加者名簿に載るため、入力がそろうと参加できます。
             <Link href="/profile" className="ml-1 font-bold underline">
               プロフィールを編集
             </Link>

@@ -2,10 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { getMissingDocumentFields } from '@/lib/profileCompleteness'
-import { formatJpDateRange } from '@/lib/formatDate'
+import { getMissingDocumentFields, LEADER_POSITION } from '@/lib/profileCompleteness'
+import { getSubmissionStatus } from '@/lib/submissionDeadline'
+import { needsSubmission } from '@/lib/submissionRequirement'
+import { formatJpDate, formatJpDateRange } from '@/lib/formatDate'
 import { formatMeetingTime, pickMeetingItem } from '@/lib/meetingPoint'
-import { Backpack, IdCard, MapPin, Megaphone, Tent, type LucideIcon } from 'lucide-react'
+import { Backpack, Car, FileText, IdCard, MapPin, Megaphone, Tent, type LucideIcon } from 'lucide-react'
 import {
   formatCapacity,
   formatDeadline,
@@ -41,7 +43,7 @@ export default async function HomePage() {
   ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('name, avatar_url, student_id, grade, department, phone, school_email, academic_advisor')
+      .select('name, avatar_url, student_id, grade, department, phone, school_email')
       .eq('id', user.id)
       .single(),
     supabase
@@ -50,7 +52,7 @@ export default async function HomePage() {
       .eq('user_id', user.id),
     supabase
       .from('participants')
-      .select('plan_id, status, plans(id, group_id, title, status, start_date, end_date)')
+      .select('plan_id, status, brings_car, plans(id, group_id, title, status, start_date, end_date)')
       .eq('user_id', user.id),
     supabase.from('preparations').select('plan_id').eq('user_id', user.id),
     supabase
@@ -60,7 +62,9 @@ export default async function HomePage() {
       .eq('status', 'draft'),
   ])
 
-  const missingFields = getMissingDocumentFields(profile)
+  // 部長は計画書の【責任者】欄に載るので、TEL・Mail も必須
+  const isLeader = (memberships ?? []).some((m) => m.position === LEADER_POSITION)
+  const missingFields = getMissingDocumentFields(profile, { isLeader })
 
   const myGroups = (memberships ?? [])
     .map((membership) => ({
@@ -85,6 +89,23 @@ export default async function HomePage() {
       : { data: [] }
 
   const today = new Date().toISOString().slice(0, 10)
+
+  // 学校提出用の計画書は、実施日の7営業日前までに学生係へ出す決まり。
+  // 起案者と、そのグループの部長（計画書の責任者）に、提出期限を催促する。
+  const leaderGroupIds = new Set(
+    myGroups.filter((entry) => entry.position === LEADER_POSITION).map((entry) => entry.group!.id)
+  )
+  const { data: submissionPlans } =
+    groupIds.length > 0
+      ? await supabase
+          .from('plans')
+          .select(
+            'id, group_id, title, creator_id, start_date, plan_documents(submitted_at, activity_location, activity_kind)'
+          )
+          .in('group_id', groupIds)
+          .eq('status', 'recruiting')
+          .gte('start_date', today)
+      : { data: [] }
   const in7Days = isoDateAfterDays(7)
   const myParticipantPlanIds = new Set((myParticipations ?? []).map((p) => p.plan_id))
 
@@ -116,6 +137,51 @@ export default async function HomePage() {
       Icon: Backpack,
       text: `「${plan.title}」の持ち物を登録する`,
       href: `/groups/${plan.group_id}/plans/${plan.id}`,
+    })
+  }
+
+  // 2.5) 参加した計画で、車を出せるかまだ答えていない（計画書の「入構車両」に使う）
+  for (const participation of myParticipations ?? []) {
+    if (participation.brings_car != null) continue
+    const plan = Array.isArray(participation.plans)
+      ? (participation.plans[0] ?? null)
+      : participation.plans
+    if (!plan || plan.status !== 'recruiting') continue
+    const lastDay = plan.end_date || plan.start_date
+    if (lastDay && lastDay < today) continue
+    todos.push({
+      key: `car-${plan.id}`,
+      Icon: Car,
+      text: `「${plan.title}」で車を出せるか回答する`,
+      href: `/groups/${plan.group_id}/plans/${plan.id}`,
+    })
+  }
+
+  // 2.6) 計画書の提出（起案者・部長）。提出済みのものは出さない
+  for (const plan of submissionPlans ?? []) {
+    if (plan.creator_id !== user.id && !leaderGroupIds.has(plan.group_id)) continue
+    const document = Array.isArray(plan.plan_documents)
+      ? (plan.plan_documents[0] ?? null)
+      : plan.plan_documents
+    const status = getSubmissionStatus({
+      startDate: plan.start_date,
+      submittedAt: document?.submitted_at ?? null,
+      today,
+    })
+    if (!status || status.level === 'submitted') continue
+    // 「提出不要」と答えた計画は催促しない（未回答なら出し忘れ防止で催促する）
+    if (document && !needsSubmission(document.activity_location, document.activity_kind)) continue
+    const when =
+      status.level === 'overdue'
+        ? `期限 ${formatJpDate(status.deadline)} を過ぎています`
+        : status.level === 'today'
+          ? '期限は今日まで'
+          : `期限 ${formatJpDate(status.deadline)}・あと${status.daysLeft}日`
+    todos.push({
+      key: `submit-${plan.id}`,
+      Icon: FileText,
+      text: `「${plan.title}」の計画書を学生係へ提出する（${when}）`,
+      href: `/groups/${plan.group_id}/plans/${plan.id}/document`,
     })
   }
 

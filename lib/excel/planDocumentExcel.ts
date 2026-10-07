@@ -4,8 +4,8 @@
 
 import ExcelJS from 'exceljs'
 import {
-  ROSTER_FOOTNOTE,
   ROSTER_MIN_ROWS,
+  SUBMISSION_FOOTNOTE,
   padRoster,
   type PlanDocumentData,
 } from '@/lib/planDocument'
@@ -64,18 +64,11 @@ export async function generatePlanDocumentExcel(
   addPlain(data.recipient)
   sheet.addRow([])
 
-  // 団体・代表者・顧問（ラベル + 値）
+  // 団体名・代表者氏名・顧問教員（ラベル + 値）
   const headerPairs: [string, string][] = [
     ['団体名', data.groupName],
-    ['代表者氏名', data.representative.name],
-    ['学籍番号', data.representative.studentId],
-    ['所属等', data.representative.department],
-    ['TEL', data.representative.phone],
-    ['E-mail', data.representative.email],
+    ['代表者氏名', data.representativeName],
     ['顧問教員', data.advisorName],
-    ['所属等', data.advisorAffiliation],
-    ['TEL', data.advisorPhone],
-    ['起案者代表', data.drafterName],
   ]
   for (const [label, value] of headerPairs) {
     const row = sheet.addRow(['', label, value])
@@ -84,9 +77,16 @@ export async function generatePlanDocumentExcel(
   }
 
   sheet.addRow([])
-  addPlain('下記のとおり、合宿等を企画しました。（申請いたします。）')
-  addPlain('許可していただきますようにお願いします。')
-  addPlain('記', 'center')
+  const titleRow = sheet.addRow([data.applicationTitle || '○○企画'])
+  sheet.mergeCells(`A${titleRow.number}:C${titleRow.number}`)
+  titleRow.getCell(1).alignment = { horizontal: 'center' }
+  titleRow.getCell(1).font = { size: 12 }
+  sheet.addRow([])
+  for (const text of ['下記のように企画しました。', '許可していただきますようお願いします。', '記']) {
+    const row = sheet.addRow([text])
+    sheet.mergeCells(`A${row.number}:C${row.number}`)
+    row.getCell(1).alignment = { horizontal: 'center' }
+  }
   sheet.addRow([])
 
   // 記の表。様式（グループが決めた行の並び）に沿って描く
@@ -115,35 +115,48 @@ export async function generatePlanDocumentExcel(
     }
   }
 
-  // ---------------- シート2: 参加者名簿 ----------------
-  const roster = workbook.addWorksheet('参加者名簿')
-  roster.columns = [
-    { header: '', width: 5 },
-    { header: '学生番号', width: 13 },
-    { header: '役職', width: 9 },
-    { header: '学年', width: 6 },
-    { header: '所属', width: 30 },
-    { header: '氏名', width: 14 },
-    { header: 'TEL', width: 16 },
-    { header: 'E-mail', width: 34 },
-    { header: '指導教員氏名', width: 14 },
+  // 【責任者】（部長の情報）
+  sheet.addRow([])
+  const responsiblePairs: [string, string][] = [
+    ['【責任者】', ''],
+    ['代表者氏名', data.responsible.name],
+    ['学籍番号', data.responsible.studentId],
+    ['TEL', data.responsible.phone],
+    ['Mail', data.responsible.email],
   ]
+  for (const [label, value] of responsiblePairs) {
+    sheet.addRow(['', label, value])
+  }
 
-  roster.spliceRows(1, 0, ['参加者名簿'])
+  sheet.addRow([])
+  const footnote = sheet.addRow([SUBMISSION_FOOTNOTE])
+  footnote.getCell(1).font = { size: 9 }
+
+  // ---------------- シート2: 参加者名簿 ----------------
+  // 名簿が要らない活動（学内）では、シートごと作らない
+  if (data.includeRoster) {
+    addRosterSheet(workbook, data)
+  }
+
+  sheet.pageSetup = { orientation: 'portrait', fitToPage: true }
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  return new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+}
+
+/** シート2: 参加者名簿 */
+function addRosterSheet(workbook: ExcelJS.Workbook, data: PlanDocumentData) {
+  const roster = workbook.addWorksheet('参加者名簿')
+  // 列に header を付けると1行目に見出しが入り、下の見出し行と二重になるので幅だけ決める
+  roster.columns = [{ width: 5 }, { width: 16 }, { width: 24 }, { width: 30 }]
+
+  roster.addRow(['参加者名簿'])
   roster.getCell('A1').font = { bold: true, size: 12 }
   roster.addRow([])
 
-  const headerRow = roster.addRow([
-    '',
-    '学生番号',
-    '役職',
-    '学年',
-    '所属',
-    '氏名',
-    'TEL',
-    'E-mail',
-    '指導教員氏名',
-  ])
+  const headerRow = roster.addRow(['', '学生番号', '学科学年', '氏名'])
   headerRow.eachCell((cell) => styleHeaderCell(cell))
 
   // 様式に合わせて最低20行の枠を出す
@@ -151,37 +164,23 @@ export async function generatePlanDocumentExcel(
     const row = roster.addRow([
       index + 1,
       entry?.studentId ?? '',
-      entry?.position ?? '',
-      entry?.grade ?? '',
-      entry?.department ?? '',
+      entry?.departmentGrade ?? '',
       entry?.name ?? '',
-      entry?.phone ?? '',
-      entry?.email ?? '',
-      entry?.advisor ?? '',
     ])
+    row.height = 22
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       styleValueCell(cell)
-      if (colNumber === 1 || colNumber === 4) {
+      if (colNumber <= 2) {
         cell.alignment = { vertical: 'middle', horizontal: 'center' }
       }
     })
   }
 
-  roster.addRow([])
-  const footnote = roster.addRow([ROSTER_FOOTNOTE])
-  footnote.getCell(1).font = { size: 9 }
-
   // 20人を超えても崩れないよう、実データ行数を基準に印刷範囲を設定
   const lastRosterRow = 3 + Math.max(ROSTER_MIN_ROWS, data.roster.length)
   roster.pageSetup = {
-    orientation: 'landscape',
+    orientation: 'portrait',
     fitToPage: true,
-    printArea: `A1:I${lastRosterRow}`,
+    printArea: `A1:D${lastRosterRow}`,
   }
-  sheet.pageSetup = { orientation: 'portrait', fitToPage: true }
-
-  const buffer = await workbook.xlsx.writeBuffer()
-  return new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  })
 }

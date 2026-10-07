@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import ProfileTabs from './ProfileTabs'
-import { getMissingDocumentFields } from '@/lib/profileCompleteness'
+import { getMissingDocumentFields, LEADER_POSITION } from '@/lib/profileCompleteness'
 import { CircleQuestionMark } from 'lucide-react'
 
 export const metadata = { title: 'プロフィール' }
@@ -23,7 +23,7 @@ export default async function ProfilePage({
     redirect('/login')
   }
 
-  const [{ data: profile }, { data: cars }, { data: gear }] = await Promise.all([
+  const [{ data: profile }, { data: cars }, { data: gear }, { data: leaderRows }] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', user.id).single(),
     supabase
       .from('cars')
@@ -35,9 +35,17 @@ export default async function ProfilePage({
       .select('*')
       .eq('owner_id', user.id)
       .order('created_at', { ascending: false }),
+    // 部長は計画書の【責任者】欄に TEL・Mail が載るので、その2つも必須にする
+    supabase
+      .from('group_members')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('position', LEADER_POSITION)
+      .limit(1),
   ])
 
-  const missingFields = getMissingDocumentFields(profile)
+  const isLeader = (leaderRows ?? []).length > 0
+  const missingFields = getMissingDocumentFields(profile, { isLeader })
 
   return (
     <div>
@@ -59,6 +67,7 @@ export default async function ProfilePage({
           </p>
           <p className="mt-1 text-xs leading-5 text-green-700">
             ここで入力した内容は、計画に参加したときに<strong>計画書の名簿へ自動で反映</strong>されます。
+            入力がそろうまで、計画には参加できません。
             未入力：{missingFields.map((field) => field.label).join('・')}
           </p>
         </div>
@@ -70,6 +79,7 @@ export default async function ProfilePage({
         gear={gear ?? []}
         userId={user.id}
         redirectHomeOnSave={isOnboarding}
+        isLeader={isLeader}
       />
     </div>
   )
