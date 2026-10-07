@@ -1,6 +1,6 @@
 'use client'
 
-import { useForm } from 'react-hook-form'
+import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
@@ -11,23 +11,35 @@ import { useToast } from '@/components/Toast'
 import { toUserMessage } from '@/lib/errorMessage'
 import { User } from 'lucide-react'
 
-const schema = z.object({
-  name: z.string().min(1, '名前を入力してください'),
-  grade: z
-    .number()
-    .int()
-    .min(1)
-    .max(6)
-    .nullable()
-    .transform((v) => (v === null || isNaN(v) ? null : v))
-    .optional(),
-  department: z.string().optional().nullable(),
-  student_id: z.string().optional().nullable(),
-  school_email: z.string().email('有効なメールアドレス').optional().or(z.literal('')).nullable(),
-  phone: z.string().optional().nullable(),
-  academic_advisor: z.string().optional().nullable(),
-})
-type FormValues = z.infer<typeof schema>
+// 計画書の名簿（学生番号・学科学年・氏名）に載る項目はすべて必須。
+// 部長は【責任者】欄に TEL・Mail も載るので、その2つも必須にする。
+function createSchema(isLeader: boolean) {
+  const required = (message: string) => z.string().trim().min(1, message)
+  const gradeMessage = '学年は1〜6で入力してください'
+  return z.object({
+    name: required('名前を入力してください'),
+    grade: z
+      .number({ error: '学年を入力してください' })
+      .int(gradeMessage)
+      .min(1, gradeMessage)
+      .max(6, gradeMessage),
+    department: required('学科を入力してください'),
+    student_id: required('学籍番号を入力してください'),
+    school_email: isLeader
+      ? required('部長はメールアドレスが必須です').email('有効なメールアドレスを入力してください')
+      : z.string().trim().email('有効なメールアドレスを入力してください').or(z.literal('')),
+    phone: isLeader ? required('部長は電話番号が必須です') : z.string().trim(),
+  })
+}
+
+type FormValues = {
+  name: string
+  grade: number
+  department: string
+  student_id: string
+  school_email: string
+  phone: string
+}
 
 /** 画像を差し替えた直後に古い画像が表示されないよう、URLにキャッシュ避けを付ける */
 function withCacheBuster(url: string) {
@@ -42,7 +54,6 @@ type Profile = {
   student_id: string | null
   school_email: string | null
   phone: string | null
-  academic_advisor: string | null
   avatar_url: string | null
 }
 
@@ -50,9 +61,16 @@ type Props = {
   profile: Profile | null
   userId: string
   redirectHomeOnSave?: boolean
+  /** どこかのグループで部長なら、電話番号・メールも必須にする */
+  isLeader?: boolean
 }
 
-export default function ProfileForm({ profile, userId, redirectHomeOnSave = false }: Props) {
+export default function ProfileForm({
+  profile,
+  userId,
+  redirectHomeOnSave = false,
+  isLeader = false,
+}: Props) {
   const supabase = createClient()
   const toast = useToast()
   const router = useRouter()
@@ -66,15 +84,14 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(createSchema(isLeader)) as Resolver<FormValues>,
     defaultValues: {
       name: profile?.name ?? '',
-      grade: profile?.grade ?? null,
+      grade: profile?.grade ?? undefined,
       department: profile?.department ?? '',
       student_id: profile?.student_id ?? '',
       school_email: profile?.school_email ?? '',
       phone: profile?.phone ?? '',
-      academic_advisor: profile?.academic_advisor ?? '',
     },
   })
 
@@ -169,30 +186,40 @@ export default function ProfileForm({ profile, userId, redirectHomeOnSave = fals
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="学年" error={errors.grade?.message}>
+          <Field label="学年 *" error={errors.grade?.message}>
             <input {...register('grade', { valueAsNumber: true })} type="number" min={1} max={6} className={inputClass} placeholder="1〜6" />
           </Field>
-          <Field label="学科・コース" error={errors.department?.message}>
+          <Field label="学科 *" error={errors.department?.message}>
             <input {...register('department')} className={inputClass} placeholder="知能情報工学科" />
           </Field>
         </div>
 
-        <Field label="学籍番号" error={errors.student_id?.message}>
+        <Field label="学籍番号 *" error={errors.student_id?.message}>
           {/* 学籍番号はアルファベットを含む場合があるため、数字キーパッドに固定しない */}
           <input {...register('student_id')} autoComplete="off" className={inputClass} placeholder="23xxxxx" />
         </Field>
 
-        <Field label="学校用メールアドレス" error={errors.school_email?.message}>
-          <input {...register('school_email')} type="email" autoComplete="email" inputMode="email" className={inputClass} placeholder="xxxx@kyutech.ac.jp" />
-        </Field>
-
-        <Field label="電話番号" error={errors.phone?.message}>
+        {/* 部長は計画書の【責任者】欄に載るため必須。それ以外の人は任意 */}
+        <Field
+          label={isLeader ? '電話番号 *' : '電話番号'}
+          error={errors.phone?.message}
+        >
           <input {...register('phone')} type="tel" autoComplete="tel" inputMode="tel" className={inputClass} placeholder="090-xxxx-xxxx" />
         </Field>
 
-        <Field label="指導教員氏名" error={errors.academic_advisor?.message}>
-          <input {...register('academic_advisor')} className={inputClass} placeholder="田中 教授" />
+        <Field
+          label={isLeader ? 'メールアドレス *' : 'メールアドレス'}
+          error={errors.school_email?.message}
+        >
+          <input {...register('school_email')} type="email" autoComplete="email" inputMode="email" className={inputClass} placeholder="xxxx@mail.kyutech.jp" />
         </Field>
+
+        <p className="text-xs leading-5 text-gray-500">
+          * は必須です。学籍番号・学科・学年・氏名は、計画書の参加者名簿に載ります。
+          {isLeader
+            ? '部長は、計画書の【責任者】欄に電話番号とメールアドレスも載ります。'
+            : '電話番号・メールアドレスは、部長になったときに必須になります。'}
+        </p>
 
         <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3">
           {isSubmitting ? '保存中...' : '保存'}

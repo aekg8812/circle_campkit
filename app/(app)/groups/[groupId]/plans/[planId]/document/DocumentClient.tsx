@@ -7,13 +7,14 @@ import { createClient } from '@/lib/supabase/client'
 import { openDatePicker } from '@/lib/dateInput'
 import {
   DEFAULT_RECIPIENT,
-  ROSTER_FOOTNOTE,
-  buildHospitalLabel,
+  buildApplicationTitle,
   buildLodgingLines,
   buildRoster,
   buildScheduleDays,
-  formatMonthDayRange,
+  formatPresence,
   formatWareki,
+  formatWarekiRange,
+  isOvernight,
   padRoster,
   type PlanDocumentData,
   type PlanDocumentFormValues,
@@ -30,17 +31,28 @@ import {
 } from '@/lib/documentTemplate'
 import FirstTimeNote from '@/components/FirstTimeNote'
 import DocumentSheet from '@/components/DocumentSheet'
+import SubmissionDeadlineNotice from '@/components/SubmissionDeadlineNotice'
+import {
+  ACTIVITY_KIND_OPTIONS,
+  ACTIVITY_LOCATION_OPTIONS,
+  getSubmissionRequirement,
+  parseActivityKind,
+  parseActivityLocation,
+  type ActivityKind,
+  type ActivityLocation,
+  type SubmissionRequirement,
+} from '@/lib/submissionRequirement'
 import { toUserMessage } from '@/lib/errorMessage'
 
-type DocumentStep = 'input' | 'preview' | 'submit'
+type DocumentStep = 'check' | 'input' | 'preview' | 'submit'
+
+const STUDENT_AFFAIRS_EMAIL = 'jho-gakusei@jimu.kyutech.ac.jp'
 
 type Group = {
   id: string
   name: string
   // 顧問教員はグループに1つ。計画書ごとに入れ直さなくて済むようにしている
   advisor_name: string | null
-  advisor_affiliation: string | null
-  advisor_phone: string | null
 }
 
 type Plan = {
@@ -68,6 +80,8 @@ type Participant = {
   id: string
   user_id: string
   joined_at: string | null
+  /** 車を出せるか。null は未回答 */
+  brings_car: boolean | null
   profiles: ProfileRow | null
 }
 
@@ -78,18 +92,18 @@ type PlanDocumentRow = {
   recipient: string | null
   place: string | null
   advisor_name: string | null
-  advisor_affiliation: string | null
-  advisor_phone: string | null
   lodging_name: string | null
   lodging_address: string | null
-  lodging_phone: string | null
-  transport_note: string | null
-  hospital_name: string | null
-  hospital_address: string | null
-  hospital_phone: string | null
-  hospital_distance: string | null
   notes: string | null
   custom_values: Record<string, string> | null
+  apply_facility: boolean | null
+  facility_name: string | null
+  apply_event: boolean | null
+  event_name: string | null
+  outside_visitor_count: number | null
+  submitted_at: string | null
+  activity_location: string | null
+  activity_kind: string | null
 }
 
 type Props = {
@@ -97,13 +111,12 @@ type Props = {
   plan: Plan
   scheduleItems: ScheduleItem[]
   participants: Participant[]
-  memberPositions: { user_id: string; position: string }[]
-  memberProfiles: ProfileRow[]
+  /** 役職が「部長」のメンバー。代表者・責任者になる */
+  leaderProfiles: ProfileRow[]
   defaultRepresentativeId: string | null
   planDocument: PlanDocumentRow | null
   previousDocument: PlanDocumentRow | null
   creatorProfile: ProfileRow | null
-  leaderProfile: ProfileRow | null
   /** グループが決めた様式。null なら標準様式 */
   documentTemplate: unknown
 }
@@ -125,13 +138,11 @@ export default function DocumentClient({
   plan,
   scheduleItems,
   participants,
-  memberPositions,
-  memberProfiles,
+  leaderProfiles,
   defaultRepresentativeId,
   planDocument,
   previousDocument,
   creatorProfile,
-  leaderProfile,
   documentTemplate,
 }: Props) {
   const supabase = createClient()
@@ -145,9 +156,27 @@ export default function DocumentClient({
   // 現在位置をURLに持たせることで、戻る操作と再読み込みで位置が保たれる。
   const router = useRouter()
   const searchParams = useSearchParams()
+  // 最初に「学生係に何を出すか」を確認する（活動場所 × 活動内容で決まる）
+  const [activityLocation, setActivityLocation] = useState<ActivityLocation | null>(() =>
+    parseActivityLocation(planDocument?.activity_location)
+  )
+  const [activityKind, setActivityKind] = useState<ActivityKind | null>(() =>
+    parseActivityKind(planDocument?.activity_kind)
+  )
+  const requirement = getSubmissionRequirement(activityLocation, activityKind)
+  // 未回答のとき・提出不要のときは、確認ステップから先へ進ませない
+  const canProceed = requirement?.required === true
+  const includeRoster = requirement?.roster ?? true
+
   const stepParam = searchParams.get('step')
-  const step: DocumentStep =
-    stepParam === 'preview' || stepParam === 'submit' ? stepParam : 'input'
+  const step: DocumentStep = !canProceed
+    ? 'check'
+    : stepParam === 'check' ||
+        stepParam === 'input' ||
+        stepParam === 'preview' ||
+        stepParam === 'submit'
+      ? stepParam
+      : 'input'
 
   const goToStep = (next: DocumentStep) => {
     router.replace(`?step=${next}`, { scroll: true })
@@ -174,83 +203,94 @@ export default function DocumentClient({
   const [representativeId, setRepresentativeId] = useState<string | null>(
     defaultRepresentativeId
   )
+  // 学生係へ提出した日時（提出期限の催促を止めるため）
+  const [submittedAt, setSubmittedAt] = useState<string | null>(
+    planDocument?.submitted_at ?? null
+  )
+  const [markingSubmitted, setMarkingSubmitted] = useState(false)
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
-  // この計画にまだ書類が無いとき、同グループの直近の書類から引き継ぐ（初期値のみ・作成日と備考は除く）
+  // この計画にまだ書類が無いとき、同グループの直近の書類から引き継ぐ
+  // （初期値のみ。作成日・企画名・場所・学外者・その他報告事項は計画ごとに違うので除く）
   const base = planDocument ?? previousDocument
   const carriedOver = !planDocument && previousDocument != null
   const [form, setForm] = useState<PlanDocumentFormValues>({
     created_date: planDocument?.created_date ?? todayIso(),
     recipient: base?.recipient ?? DEFAULT_RECIPIENT,
+    apply_facility: base?.apply_facility ?? false,
+    facility_name: base?.facility_name ?? '',
+    apply_event: base?.apply_event ?? true,
+    event_name: planDocument?.event_name ?? '',
     // 場所は計画書に入っていればそれを、無ければ計画の「場所エリア」を初期値にする
     place: planDocument?.place ?? plan.area ?? '',
-    // 顧問はグループの登録を優先。古い計画書しか無い場合はそれを引き継ぐ
-    advisor_name: group.advisor_name ?? base?.advisor_name ?? '',
-    advisor_affiliation: group.advisor_affiliation ?? base?.advisor_affiliation ?? '',
-    advisor_phone: group.advisor_phone ?? base?.advisor_phone ?? '',
+    outside_visitor_count: planDocument?.outside_visitor_count ?? 0,
     lodging_name: base?.lodging_name ?? '',
     lodging_address: base?.lodging_address ?? '',
-    lodging_phone: base?.lodging_phone ?? '',
-    transport_note: base?.transport_note ?? '',
-    hospital_name: base?.hospital_name ?? '',
-    hospital_address: base?.hospital_address ?? '',
-    hospital_phone: base?.hospital_phone ?? '',
-    hospital_distance: base?.hospital_distance ?? '',
     notes: planDocument?.notes ?? '',
   })
 
-  const setField = (key: keyof PlanDocumentFormValues, value: string) =>
-    setForm((current) => ({ ...current, [key]: value }))
+  const setField = <K extends keyof PlanDocumentFormValues>(
+    key: K,
+    value: PlanDocumentFormValues[K]
+  ) => setForm((current) => ({ ...current, [key]: value }))
+
+  // 顧問はグループの登録を優先。古い計画書しか無い場合はそれを引き継ぐ
+  const advisorName = group.advisor_name ?? base?.advisor_name ?? ''
+  const overnight = isOvernight(plan.start_date, plan.end_date)
+
+  // 代表者・責任者は役職が「部長」の人（複数いれば選んだ人）
+  const representative =
+    leaderProfiles.find((profile) => profile.id === representativeId) ??
+    leaderProfiles[0] ??
+    null
+
+  // 入構車両: 参加するときに「車を出せる」と答えた人の数
+  const carParticipants = participants.filter((participant) => participant.brings_car === true)
+  const unansweredCarParticipants = participants.filter(
+    (participant) => participant.brings_car == null
+  )
 
   // フォームの値と参加者情報から、プレビュー/PDF 共通のデータを組み立てる
-  const documentBase: Omit<PlanDocumentData, 'rows'> = useMemo(() => {
-    const positions = new Map(
-      memberPositions.map((member) => [member.user_id, member.position])
-    )
-    // 代表者はフォームで選べる（部長が複数いる場合に誰を載せるか明示できる）
-    const representative =
-      memberProfiles.find((profile) => profile.id === representativeId) ??
-      leaderProfile ??
-      creatorProfile
-
-    return {
+  const documentBase: Omit<PlanDocumentData, 'rows'> = useMemo(
+    () => ({
       createdDateLabel: formatWareki(form.created_date),
       recipient: form.recipient,
       groupName: group.name,
-      representative: {
+      representativeName: representative?.name ?? '',
+      advisorName,
+      applicationTitle: buildApplicationTitle(form, plan.title),
+      responsible: {
         name: representative?.name ?? '',
         studentId: representative?.student_id ?? '',
-        department: representative?.department ?? '',
         phone: representative?.phone ?? '',
         email: representative?.school_email ?? '',
       },
-      advisorName: form.advisor_name,
-      advisorAffiliation: form.advisor_affiliation,
-      advisorPhone: form.advisor_phone,
       drafterName: creatorProfile?.name ?? '',
       title: plan.title,
-      dateRangeLabel: formatMonthDayRange(plan.start_date, plan.end_date),
+      dateRangeLabel: formatWarekiRange(plan.start_date, plan.end_date),
       place: form.place.trim() || plan.area || '',
       scheduleDays: buildScheduleDays(scheduleItems),
-      lodgingLines: buildLodgingLines(form),
-      transportLabel:
-        form.transport_note || plan.default_transport || '未定',
-      participantCountLabel: `${participants.length}人`,
-      hospitalLabel: buildHospitalLabel(form),
+      vehiclesLabel: formatPresence(carParticipants.length, '台'),
+      outsideVisitorsLabel: formatPresence(form.outside_visitor_count, '人'),
+      lodgingLines: buildLodgingLines(form, overnight),
       notes: form.notes,
-      roster: buildRoster(participants, positions),
-    }
-  }, [
-    form,
-    group,
-    plan,
-    scheduleItems,
-    participants,
-    memberPositions,
-    memberProfiles,
-    representativeId,
-    creatorProfile,
-    leaderProfile,
-  ])
+      participantCountLabel: `${participants.length}人`,
+      roster: buildRoster(participants),
+      includeRoster,
+    }),
+    [
+      form,
+      group.name,
+      plan,
+      scheduleItems,
+      participants,
+      carParticipants.length,
+      representative,
+      advisorName,
+      overnight,
+      creatorProfile,
+      includeRoster,
+    ]
+  )
 
   // 様式に沿って、表に出す行を組み立てる。
   // プレビュー・PDF・Excel はいずれもこの rows から描く。
@@ -263,18 +303,26 @@ export default function DocumentClient({
   )
 
   // 提出前チェック（1）計画書そのものの未入力。
-  // これまで参加者のプロフィールしか見ておらず、顧問教員や宿泊所が
-  // 空欄のままでも何も言われなかった。実際にはそちらの方が提出時に困る。
+  // 顧問・部長はグループ側で直すので、直す場所が分かるように書いておく
+  const representativeMissing = representative
+    ? getMissingDocumentFields(representative, { isLeader: true }).map(
+        (field) => `部長の${field.label}`
+      )
+    : ['部長（グループで役職を設定）']
   const missingDocumentFields = [
-    // 顧問はグループ設定に移したので、直す場所が分かるように書いておく
-    { label: '顧問教員（グループ設定）', filled: form.advisor_name.trim() !== '' },
-    { label: '場所', filled: form.place.trim() !== '' },
-    { label: '宿泊所の住所', filled: form.lodging_address.trim() !== '' },
-    { label: '周辺の病院名', filled: form.hospital_name.trim() !== '' },
-    { label: '病院のTEL', filled: form.hospital_phone.trim() !== '' },
+    { label: '顧問教員（グループ設定）', filled: advisorName.trim() !== '' },
+    { label: '表題（利用許可願・企画のどちらか）', filled: form.apply_facility || form.apply_event },
+    {
+      label: '利用する施設',
+      filled: !form.apply_facility || form.facility_name.trim() !== '',
+    },
+    { label: '場所', filled: documentBase.place.trim() !== '' },
+    { label: '内容（行程表）', filled: documentBase.scheduleDays.length > 0 },
+    { label: '宿泊先', filled: !overnight || form.lodging_name.trim() !== '' },
   ]
     .filter((field) => !field.filled)
     .map((field) => field.label)
+    .concat(representativeMissing)
 
   // 提出前チェック（2）参加者ごとに、名簿で空欄になる項目を洗い出す
   const incompleteParticipants = participants
@@ -285,8 +333,9 @@ export default function DocumentClient({
     .filter((entry) => entry.missing.length > 0)
 
   // 入力が止まってから自動で保存する。
-  // 項目が15以上あり、スマホで埋めている途中に離脱すると全部消えていたため、
+  // 項目が多く、スマホで埋めている途中に離脱すると全部消えていたため、
   // 「保存ボタンを押し忘れる」という事故そのものを無くす。
+  // 旧様式の欄（顧問の所属・病院・移動手段など）は送らない＝保存済みの値はそのまま残る。
   const persistDocument = useCallback(async () => {
     setSaveState('saving')
 
@@ -295,21 +344,19 @@ export default function DocumentClient({
         plan_id: plan.id,
         created_date: form.created_date || null,
         recipient: form.recipient || null,
+        apply_facility: form.apply_facility,
+        facility_name: form.facility_name || null,
+        apply_event: form.apply_event,
+        event_name: form.event_name || null,
         place: form.place || null,
-        advisor_name: form.advisor_name || null,
-        advisor_affiliation: form.advisor_affiliation || null,
-        advisor_phone: form.advisor_phone || null,
+        outside_visitor_count: Math.max(0, Math.floor(form.outside_visitor_count) || 0),
         lodging_name: form.lodging_name || null,
         lodging_address: form.lodging_address || null,
-        lodging_phone: form.lodging_phone || null,
-        transport_note: form.transport_note || null,
-        hospital_name: form.hospital_name || null,
-        hospital_address: form.hospital_address || null,
-        hospital_phone: form.hospital_phone || null,
-        hospital_distance: form.hospital_distance || null,
         notes: form.notes || null,
         custom_values: customValues,
         representative_user_id: representativeId,
+        activity_location: activityLocation,
+        activity_kind: activityKind,
       },
       { onConflict: 'plan_id' }
     )
@@ -322,7 +369,7 @@ export default function DocumentClient({
 
     setMessage(null)
     setSaveState('saved')
-  }, [supabase, plan.id, form, representativeId, customValues])
+  }, [supabase, plan.id, form, representativeId, customValues, activityLocation, activityKind])
 
   // 初回描画では保存しない（読み込んだ内容をそのまま書き戻さないため）
   const skipFirstSave = useRef(true)
@@ -337,6 +384,23 @@ export default function DocumentClient({
     }, 1500)
     return () => window.clearTimeout(timer)
   }, [persistDocument])
+
+  /** 学生係へ提出したことを記録する（取り消しもできる） */
+  const toggleSubmitted = async () => {
+    setMarkingSubmitted(true)
+    const next = submittedAt ? null : new Date().toISOString()
+    const { error } = await supabase
+      .from('plan_documents')
+      .upsert({ plan_id: plan.id, submitted_at: next }, { onConflict: 'plan_id' })
+    setMarkingSubmitted(false)
+    if (error) {
+      setMessage({ type: 'error', text: toUserMessage(error, '記録できませんでした。') })
+      return
+    }
+    setSubmittedAt(next)
+    toast(next ? '提出済みにしました' : '提出済みを取り消しました')
+    router.refresh()
+  }
 
   /** ファイルをダウンロードさせる共通処理 */
   const saveBlob = (blob: Blob, filename: string) => {
@@ -392,24 +456,48 @@ export default function DocumentClient({
   }
 
   // 提出メールの定型文（データから自動生成。送信はせず、コピーして各自のメールソフトで使う）
-  const mailSubject = `【合宿等申請】${documentData.title} 計画書の提出（${documentData.groupName}）`
+  // 宛先は学生係。添付するものは「何を出すか」の答えで変わる
+  const documentLabel = includeRoster ? '企画書・参加者名簿' : '企画書'
+  const attachments = [
+    `${documentLabel}（PDF）`,
+    requirement?.advisorMail && '顧問教員から確認を得たメール等のスクリーンショット',
+    requirement?.tournamentNote &&
+      '（大会・イベントに参加する場合）大会要項など詳細が分かるもの',
+  ].filter((item): item is string => Boolean(item))
+
+  const mailSubject = `【企画書提出】${documentData.applicationTitle || documentData.title}（${documentData.groupName}）`
   const mailBody = [
-    documentData.recipient,
+    '情報工学部 学生係 御中',
     '',
-    `お世話になっております。${documentData.groupName}の${documentData.drafterName || documentData.representative.name}です。`,
-    `下記のとおり${documentData.title}を計画いたしましたので、計画書（計画書＋参加者名簿）を添付にてお送りいたします。`,
+    `お世話になっております。${documentData.groupName}の${documentData.drafterName || documentData.responsible.name}です。`,
+    `下記の活動について、${documentLabel}を提出いたします。`,
     'ご確認のほど、よろしくお願いいたします。',
     '',
-    `■ 行事名：${documentData.title}`,
+    `■ 表題：${documentData.applicationTitle}`,
     `■ 日時：${documentData.dateRangeLabel}`,
     `■ 場所：${documentData.place}`,
-    `■ 参加人数：${documentData.participantCountLabel}`,
+    ...(includeRoster ? [`■ 参加人数：${documentData.participantCountLabel}`] : []),
+    '',
+    '【添付】',
+    ...attachments.map((item) => `・${item}`),
     '',
     '——',
     documentData.groupName,
-    `代表：${documentData.representative.name}`,
-    documentData.representative.email,
+    `責任者：${documentData.responsible.name}`,
+    documentData.responsible.email,
   ].join('\n')
+
+  const mailSteps = [
+    `上の「PDFで出力」で${documentLabel}のPDFをダウンロードする`,
+    requirement?.advisorMail &&
+      '顧問教員に活動内容を伝えて確認をもらい、そのメール等のスクリーンショットを撮る（「先生の承認済み」と書くだけでは認められません）',
+    requirement?.tournamentNote &&
+      '大会やイベントに参加する場合は、大会要項など詳細が分かるものを用意する',
+    'メールソフト（Gmail・大学メールなど）で新規メールを作成し、宛先に学生係のアドレスを入れる',
+    '下の「件名」「本文」をコピーして貼り付ける（内容は必要に応じて調整）',
+    '添付するものをすべて付けて送信する',
+    '送信したら、上の「学生係へ提出した」を押す',
+  ].filter((item): item is string => Boolean(item))
 
   const copyText = async (text: string, label: string) => {
     try {
@@ -440,7 +528,12 @@ export default function DocumentClient({
         <SaveIndicator state={saveState} />
       </div>
 
-      <StepNav step={step} onChange={goToStep} />
+      <StepNav step={step} onChange={goToStep} locked={!canProceed} />
+
+      {/* 学生係への提出期限（実施日の7営業日前）。どのステップでも見えるようにする */}
+      {requirement?.required !== false && (
+        <SubmissionDeadlineNotice startDate={plan.start_date} submittedAt={submittedAt} />
+      )}
 
       {message && (
         <p
@@ -455,7 +548,7 @@ export default function DocumentClient({
       )}
 
       {/* 提出前チェック：確認ステップでまとめて出す */}
-      {step === 'preview' && participants.length > 0 && (
+      {step === 'preview' && includeRoster && participants.length > 0 && (
         <div className="print:hidden">
           {incompleteParticipants.length === 0 ? (
             <p className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
@@ -482,6 +575,50 @@ export default function DocumentClient({
         </div>
       )}
 
+      {/* 0. 学生係に何を出すか（活動場所 × 活動内容）。答えるまで先へ進めない */}
+      {step === 'check' && (
+        <section className="space-y-5 rounded-2xl bg-white p-5 shadow-sm print:hidden">
+          <div>
+            <h2 className="text-sm font-bold text-gray-700">学生係に何を出すか確認する</h2>
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              学生係の「活動内容ごとの提出書類一覧」に沿って、この計画で必要な書類を決めます。
+              答えは計画ごとに保存され、あとから変えられます。
+            </p>
+          </div>
+
+          <ChoiceGroup
+            legend="活動場所"
+            options={ACTIVITY_LOCATION_OPTIONS}
+            value={activityLocation}
+            onChange={setActivityLocation}
+          />
+          <ChoiceGroup
+            legend="活動内容"
+            options={ACTIVITY_KIND_OPTIONS}
+            value={activityKind}
+            onChange={setActivityKind}
+          />
+          <p className="text-xs leading-5 text-gray-500">
+            「通常の活動」はサークル本来の目的に沿った活動（キャンプ・練習・大会など）、
+            「通常と異なる活動」はそれ以外（合宿・親睦会・地域イベントへの参加など）です。
+          </p>
+
+          {requirement && <RequirementSummary requirement={requirement} />}
+
+          {requirement?.required ? (
+            <button type="button" onClick={() => goToStep('input')} className="btn-primary w-full">
+              内容の入力へ →
+            </button>
+          ) : (
+            requirement && (
+              <p className="rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
+                この計画は、学生係への提出は不要です。提出期限のお知らせも出ません。
+              </p>
+            )
+          )}
+        </section>
+      )}
+
       {/* 入力フォーム（グループのメンバーなら誰でも編集できる） */}
       {step === 'input' && (
         <section className="space-y-5 rounded-2xl bg-white p-5 shadow-sm print:hidden">
@@ -496,55 +633,113 @@ export default function DocumentClient({
           </div>
           <div>
             <p className="mt-1 text-xs text-gray-500">
-              行事名・日程・参加者名簿などは計画と参加者のプロフィールから自動反映されます。
+              日時・内容・入構車両・参加者名簿などは、計画と参加者のプロフィールから自動反映されます。
               グループのメンバーなら<strong>誰でも編集・保存できます</strong>（分担して入力できます）。
             </p>
             {carriedOver && (
               <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs leading-5 text-green-700">
-                顧問教員・宛先・宿泊所・病院などを、<strong>前回の計画書から引き継ぎ</strong>ました。
+                宛先・表題の種類・宿泊先などを、<strong>前回の計画書から引き継ぎ</strong>ました。
                 内容を確認して、今回に合わせて修正してください。
               </p>
             )}
           </div>
 
-          <FormBlock title="代表者">
-            <Field label="計画書に載せる代表者">
-              <select
-                value={representativeId ?? ''}
-                onChange={(event) => setRepresentativeId(event.target.value || null)}
-                className={inputClass}
-                disabled={!canEdit}
-              >
-                {memberProfiles.length === 0 && <option value="">（メンバーがいません）</option>}
-                {memberProfiles.map((profile) => {
-                  const position =
-                    memberPositions.find((m) => m.user_id === profile.id)?.position ?? '部員'
-                  return (
+          {/* 新様式では、代表者氏名と【責任者】に役職「部長」の人がそのまま入る */}
+          <FormBlock title="代表者・責任者（部長）">
+            {leaderProfiles.length > 1 && (
+              <Field label="部長が複数いるため、載せる人を選んでください">
+                <select
+                  value={representative?.id ?? ''}
+                  onChange={(event) => setRepresentativeId(event.target.value || null)}
+                  className={inputClass}
+                  disabled={!canEdit}
+                >
+                  {leaderProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
-                      {profile.name}（{position}）
+                      {profile.name}
                     </option>
-                  )
-                })}
-              </select>
-              <p className="mt-1 text-xs text-gray-500">
-                部長が複数いる場合も、ここで誰を代表者にするか選べます。
-              </p>
-            </Field>
+                  ))}
+                </select>
+              </Field>
+            )}
             {/* 学籍番号などは本人のプロフィールから入る。
                ここに欄が無い理由が分からないと探してしまうので、出どころを書く。 */}
             <FixedInfo
               rows={[
                 { label: '団体名', value: group.name },
-                { label: '氏名', value: documentBase.representative.name },
-                { label: '学籍番号', value: documentBase.representative.studentId },
-                { label: '所属等', value: documentBase.representative.department },
-                { label: 'TEL', value: documentBase.representative.phone },
-                { label: 'E-mail', value: documentBase.representative.email },
+                { label: '代表者氏名', value: documentBase.responsible.name },
+                { label: '学籍番号', value: documentBase.responsible.studentId },
+                { label: 'TEL', value: documentBase.responsible.phone },
+                { label: 'Mail', value: documentBase.responsible.email },
               ]}
-              note="氏名・学籍番号などは、代表者本人のプロフィールから入ります。団体名はグループ設定です。"
-              href="/profile"
-              linkLabel="プロフィールを開く"
+              note={
+                representative
+                  ? 'グループで役職が「部長」の人が自動で入ります。学籍番号・TEL・Mail は部長本人のプロフィールから入ります。'
+                  : 'グループに役職が「部長」の人がいません。グループのメンバー一覧で部長を設定してください。'
+              }
+              href={representative ? '/profile' : `/groups/${group.id}`}
+              linkLabel={representative ? 'プロフィールを開く' : 'メンバー一覧を開く'}
             />
+          </FormBlock>
+
+          {/* 顧問は滅多に変わらないので、グループに1つ登録して使い回す。 */}
+          <FormBlock title="顧問教員">
+            <FixedInfo
+              rows={[{ label: '氏名', value: advisorName }]}
+              note="グループに登録した顧問教員が、すべての計画書に自動で入ります。"
+              href={`/groups/${group.id}/advisor`}
+              linkLabel={advisorName.trim() === '' ? '顧問教員を登録する' : 'グループ設定で変更'}
+            />
+          </FormBlock>
+
+          {/* 表題「○○利用許可願・○○企画」。どちらか、または両方を選ぶ */}
+          <FormBlock title="表題">
+            <div className="space-y-2">
+              <CheckField
+                checked={form.apply_facility}
+                onChange={(checked) => setField('apply_facility', checked)}
+                label="施設の利用許可願"
+                disabled={!canEdit}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    value={form.facility_name}
+                    onChange={(event) => setField('facility_name', event.target.value)}
+                    className={inputClass}
+                    placeholder="記入例) 講義室・体育館"
+                    disabled={!canEdit || !form.apply_facility}
+                  />
+                  <span className="flex-shrink-0 text-sm text-gray-600">利用許可願</span>
+                </div>
+              </CheckField>
+              <CheckField
+                checked={form.apply_event}
+                onChange={(checked) => setField('apply_event', checked)}
+                label="企画"
+                disabled={!canEdit}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    value={form.event_name}
+                    onChange={(event) => setField('event_name', event.target.value)}
+                    className={inputClass}
+                    placeholder={plan.title}
+                    disabled={!canEdit || !form.apply_event}
+                  />
+                  <span className="flex-shrink-0 text-sm text-gray-600">企画</span>
+                </div>
+              </CheckField>
+            </div>
+            <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+              <span className="text-xs text-gray-500">計画書の表題：</span>
+              <span className="font-semibold text-gray-800">
+                {documentBase.applicationTitle || 'どちらかを選んでください'}
+              </span>
+            </p>
+            <p className="text-xs leading-5 text-gray-500">
+              学内の施設（講義室・体育館など）を使うときは「利用許可願」を選びます。両方選ぶこともできます。
+              企画名が空欄なら、計画の行事名が入ります。
+            </p>
           </FormBlock>
 
           <FormBlock title="基本">
@@ -566,8 +761,6 @@ export default function DocumentClient({
                 disabled={!canEdit}
               />
             </Field>
-            {/* 以前は計画の「場所エリア」をそのまま出すだけで、ここに欄が無く、
-               未入力だと空欄のまま直せなかった */}
             <Field label="場所">
               <input
                 value={form.place}
@@ -580,122 +773,134 @@ export default function DocumentClient({
                 計画の「場所エリア」が初めから入っています。提出用に詳しく書きたいときは、ここで直せます。
               </p>
             </Field>
-          </FormBlock>
-
-          {/* 顧問は滅多に変わらないので、グループに1つ登録して使い回す。
-             ここでは確認だけにして、毎回の入力をなくしている。 */}
-          <FormBlock title="顧問教員">
             <FixedInfo
               rows={[
-                { label: '氏名', value: form.advisor_name },
-                { label: '所属等', value: form.advisor_affiliation },
-                { label: 'TEL', value: form.advisor_phone },
+                { label: '日時', value: documentBase.dateRangeLabel },
+                {
+                  label: '内容',
+                  value:
+                    documentBase.scheduleDays.length > 0
+                      ? `行程表から自動で入ります（${documentBase.scheduleDays.length}日分）`
+                      : '',
+                },
               ]}
-              note="グループに登録した顧問教員が、すべての計画書に自動で入ります。"
-              href={`/groups/${group.id}/advisor`}
-              linkLabel={
-                form.advisor_name.trim() === '' ? '顧問教員を登録する' : 'グループ設定で変更'
-              }
+              note="日時と内容（詳細に）は、計画の日程と行程表がそのまま入ります。"
+              href={`/groups/${group.id}/plans/${plan.id}/edit`}
+              linkLabel="計画を編集"
             />
           </FormBlock>
 
-          {hasSource(templateRows, 'lodging') && (
-          <FormBlock title="宿泊所">
-            <Field label="住所">
-              <input
-                value={form.lodging_address}
-                onChange={(event) => setField('lodging_address', event.target.value)}
-                className={inputClass}
-                placeholder="記入例) 〒000-0000 ○○県○○市○○町1-2-3"
-                disabled={!canEdit}
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="名称（任意）">
-                <input
-                  value={form.lodging_name}
-                  onChange={(event) => setField('lodging_name', event.target.value)}
-                  className={inputClass}
-                  placeholder="記入例) ○○キャンプ場"
-                  disabled={!canEdit}
-                />
-              </Field>
-              <Field label="TEL">
-                <input
-                  value={form.lodging_phone}
-                  onChange={(event) => setField('lodging_phone', event.target.value)}
-                  className={inputClass}
-                  placeholder="記入例) 0120-12-3456"
-                  disabled={!canEdit}
-                />
-              </Field>
-            </div>
-          </FormBlock>
+          {hasSource(templateRows, 'vehicles') && (
+            <FormBlock title="入構車両">
+              <p className="text-sm text-gray-800">
+                計画書には <strong>{documentBase.vehiclesLabel}</strong> と載ります。
+              </p>
+              <p className="text-xs leading-5 text-gray-500">
+                大学に集合するため、参加者が参加するときに答えた「車を出せるか」から自動で数えます。
+                {carParticipants.length > 0 &&
+                  `（車を出す人：${carParticipants
+                    .map((participant) => participant.profiles?.name ?? '名前未設定')
+                    .join('・')}）`}
+              </p>
+              {unansweredCarParticipants.length > 0 && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  まだ答えていない人がいます（
+                  {unansweredCarParticipants
+                    .map((participant) => participant.profiles?.name ?? '名前未設定')
+                    .join('・')}
+                  ）。計画のページで回答してもらってください。
+                </p>
+              )}
+            </FormBlock>
           )}
 
-          {(hasSource(templateRows, 'transport') || hasSource(templateRows, 'hospital')) && (
-          <FormBlock title="移動手段・病院">
-            <Field label={`移動手段（未入力なら「${plan.default_transport || '未定'}」）`}>
-              <input
-                value={form.transport_note}
-                onChange={(event) => setField('transport_note', event.target.value)}
-                className={inputClass}
-                placeholder="記入例) 車2台"
-                disabled={!canEdit}
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="病院名">
-                <input
-                  value={form.hospital_name}
-                  onChange={(event) => setField('hospital_name', event.target.value)}
-                  className={inputClass}
-                  placeholder="記入例) ○○病院"
-                  disabled={!canEdit}
-                />
-              </Field>
-              <Field label="TEL">
-                <input
-                  value={form.hospital_phone}
-                  onChange={(event) => setField('hospital_phone', event.target.value)}
-                  className={inputClass}
-                  placeholder="記入例) 092-123-4567"
-                  disabled={!canEdit}
-                />
-              </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="距離・所要時間">
-                <input
-                  value={form.hospital_distance}
-                  onChange={(event) => setField('hospital_distance', event.target.value)}
-                  className={inputClass}
-                  placeholder="記入例) 車10分"
-                  disabled={!canEdit}
-                />
-              </Field>
-              <Field label="住所（任意）">
-                <input
-                  value={form.hospital_address}
-                  onChange={(event) => setField('hospital_address', event.target.value)}
-                  className={inputClass}
-                  disabled={!canEdit}
-                />
-              </Field>
-            </div>
-          </FormBlock>
+          {hasSource(templateRows, 'outsideVisitors') && (
+            <FormBlock title="来校予定の学外者">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    checked={form.outside_visitor_count === 0}
+                    onChange={() => setField('outside_visitor_count', 0)}
+                    disabled={!canEdit}
+                    className="h-4 w-4"
+                  />
+                  無
+                </label>
+                <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    checked={form.outside_visitor_count > 0}
+                    onChange={() => setField('outside_visitor_count', 1)}
+                    disabled={!canEdit}
+                    className="h-4 w-4"
+                  />
+                  有
+                </label>
+                {form.outside_visitor_count > 0 && (
+                  <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                    <input
+                      type="number"
+                      min={1}
+                      value={form.outside_visitor_count}
+                      onChange={(event) =>
+                        setField(
+                          'outside_visitor_count',
+                          Math.max(1, Math.floor(Number(event.target.value)) || 1)
+                        )
+                      }
+                      className={`${inputClass} w-24`}
+                      disabled={!canEdit}
+                    />
+                    人
+                  </label>
+                )}
+              </div>
+            </FormBlock>
+          )}
+
+          {hasSource(templateRows, 'lodging') && (
+            <FormBlock title="宿泊">
+              {overnight ? (
+                <>
+                  <p className="text-xs text-gray-500">
+                    日程が{documentBase.dateRangeLabel}のため「有」になります。
+                  </p>
+                  <Field label="宿泊先">
+                    <input
+                      value={form.lodging_name}
+                      onChange={(event) => setField('lodging_name', event.target.value)}
+                      className={inputClass}
+                      placeholder="記入例) ○○キャンプ場"
+                      disabled={!canEdit}
+                    />
+                  </Field>
+                  <Field label="宿泊先の住所（任意）">
+                    <input
+                      value={form.lodging_address}
+                      onChange={(event) => setField('lodging_address', event.target.value)}
+                      className={inputClass}
+                      placeholder="記入例) ○○県○○市○○町1-2-3"
+                      disabled={!canEdit}
+                    />
+                  </Field>
+                </>
+              ) : (
+                <p className="text-sm text-gray-700">日帰りのため「無」になります。</p>
+              )}
+            </FormBlock>
           )}
 
           {hasSource(templateRows, 'notes') && (
-          <FormBlock title="備考">
-            <textarea
-              value={form.notes}
-              onChange={(event) => setField('notes', event.target.value)}
-              className={`${inputClass} min-h-20 resize-y`}
-              placeholder="記入例) 雨天時は中止し、後日改めて実施予定"
-              disabled={!canEdit}
-            />
-          </FormBlock>
+            <FormBlock title="その他報告事項">
+              <textarea
+                value={form.notes}
+                onChange={(event) => setField('notes', event.target.value)}
+                className={`${inputClass} min-h-20 resize-y`}
+                placeholder="記入例) 雨天時は中止し、後日改めて実施予定"
+                disabled={!canEdit}
+              />
+            </FormBlock>
           )}
 
           {/* このグループが様式に足した項目 */}
@@ -726,7 +931,9 @@ export default function DocumentClient({
         <section className="min-w-0 print:hidden">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-xs text-gray-500">
-              PDFは2ページ構成（計画書＋参加者名簿）で出力されます
+              {includeRoster
+                ? 'PDFは2ページ構成（企画書＋参加者名簿）で出力されます'
+                : '学内の活動なので、PDFは企画書の1ページだけです（名簿は不要）'}
             </p>
             <button
               type="button"
@@ -757,7 +964,7 @@ export default function DocumentClient({
           <div className="hidden overflow-x-auto lg:block">
             <div className="space-y-6">
               <DocumentSheet data={documentData} />
-              <RosterSheet data={documentData} />
+              {includeRoster && <RosterSheet data={documentData} />}
             </div>
           </div>
 
@@ -775,7 +982,7 @@ export default function DocumentClient({
       {/* 印刷のときだけ現れる本体（どのステップにいても印刷できるようにする） */}
       <div className="hidden print:block" id="plan-document-sheets">
         <DocumentSheet data={documentData} />
-        <RosterSheet data={documentData} />
+        {includeRoster && <RosterSheet data={documentData} />}
       </div>
 
       {/* 提出ステップ: ここで初めて出力できる */}
@@ -783,12 +990,18 @@ export default function DocumentClient({
         <section className="space-y-3 rounded-2xl bg-white p-5 shadow-sm print:hidden">
           <h2 className="text-sm font-bold text-gray-700">書類を出力する</h2>
 
-          {(missingDocumentFields.length > 0 || participants.length === 0) && (
+          {(missingDocumentFields.length > 0 || (includeRoster && participants.length === 0)) && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
               未入力のまま出力できますが、
-              {participants.length === 0 && '参加者が0人です。'}
+              {includeRoster && participants.length === 0 && '参加者が0人です。'}
               {missingDocumentFields.length > 0 &&
                 `${missingDocumentFields.join('・')}が空欄です。`}
+            </p>
+          )}
+          {unansweredCarParticipants.length > 0 && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+              車を出せるか答えていない人が{unansweredCarParticipants.length}人います。
+              入構車両の台数が変わる可能性があります。
             </p>
           )}
 
@@ -809,6 +1022,25 @@ export default function DocumentClient({
             </button>
           </div>
 
+          {/* 提出したら記録しておく。ホームや計画のページの催促が止まる */}
+          <div className="rounded-xl border border-gray-100 p-3">
+            <p className="text-xs leading-5 text-gray-500">
+              学生係へ提出したら、記録しておくと提出期限のお知らせが止まります。
+            </p>
+            <button
+              type="button"
+              onClick={toggleSubmitted}
+              disabled={markingSubmitted}
+              className={`mt-2 ${submittedAt ? 'btn-secondary' : 'btn-primary'}`}
+            >
+              {markingSubmitted
+                ? '記録中...'
+                : submittedAt
+                  ? '提出済みを取り消す'
+                  : '学生係へ提出した'}
+            </button>
+          </div>
+
           <button type="button" onClick={() => goToStep('preview')} className="btn-secondary">
             ← 確認に戻る
           </button>
@@ -818,32 +1050,58 @@ export default function DocumentClient({
       {/* メールで提出する方法（送信はせず、手順とコピペ用の定型文を案内） */}
       {step === 'submit' && (
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/[0.03] print:hidden">
-        <h2 className="text-sm font-bold text-gray-700">メールで提出する方法</h2>
-        <div className="mt-1">
-          <FirstTimeNote id="document-mail" label="提出の手順を見る">
-        <p className="text-xs text-gray-500">
-          このアプリからは送信しません。下の手順で、ご自身のメールから学務係・指導教員へ提出してください。
+        <h2 className="text-sm font-bold text-gray-700">メールで学生係へ提出する</h2>
+        <p className="mt-1 text-xs leading-5 text-gray-500">
+          このアプリからは送信しません。下の手順で、ご自身のメールから学生係へ提出してください。
+          メールでの提出はいつでも受け付けています。
         </p>
 
-        <ol className="mt-4 space-y-2">
-          {[
-            '上の「PDFで出力」でPDFをダウンロードする',
-            'メールソフト（Gmail・大学メールなど）で新規メールを作成する',
-            '宛先に学務係・指導教員のメールアドレスを入力する',
-            '下の「件名」「本文」をコピーして貼り付ける（内容は必要に応じて調整）',
-            'ダウンロードした計画書PDFを添付する',
-            '送信する',
-          ].map((step, index) => (
-            <li key={index} className="flex gap-2.5 text-sm text-gray-700">
-              <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-green-600 text-xs font-bold text-white">
-                {index + 1}
-              </span>
-              <span className="leading-6">{step}</span>
-            </li>
-          ))}
-        </ol>
+        <div className="mt-4 rounded-xl border border-gray-100 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold text-gray-500">宛先（情報工学部 学生係）</p>
+            <button
+              type="button"
+              onClick={() => copyText(STUDENT_AFFAIRS_EMAIL, '宛先')}
+              className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition-ui hover:bg-green-100"
+            >
+              コピー
+            </button>
+          </div>
+          <p className="mt-1.5 break-all text-sm text-gray-800">{STUDENT_AFFAIRS_EMAIL}</p>
+        </div>
+
+        <div className="mt-3 rounded-xl bg-gray-50 p-3">
+          <p className="text-xs font-bold text-gray-500">添付するもの</p>
+          <ul className="mt-1 space-y-0.5">
+            {attachments.map((item) => (
+              <li key={item} className="text-sm text-gray-800">・{item}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="mt-3">
+          <FirstTimeNote id="document-mail" label="提出の手順を見る">
+            <ol className="space-y-2">
+              {mailSteps.map((item, index) => (
+                <li key={index} className="flex gap-2.5 text-sm text-gray-700">
+                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-green-600 text-xs font-bold text-white">
+                    {index + 1}
+                  </span>
+                  <span className="leading-6">{item}</span>
+                </li>
+              ))}
+            </ol>
           </FirstTimeNote>
         </div>
+
+        {/* 学内の施設を使うときは、学生係のあとに教務係への手続きが続く */}
+        {requirement?.facilityNote && (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+            体育館や講義室などの施設を使う場合は、学生係の確認が終わったあとに企画書の写しを受け取り、
+            <strong>施設使用許可願と一緒に教務係へ提出</strong>します。
+            講義室の予約は利用日の1か月前からです。
+          </p>
+        )}
 
         <div className="mt-4 space-y-3">
           <div className="rounded-xl border border-gray-100 p-3">
@@ -878,7 +1136,7 @@ export default function DocumentClient({
         </div>
 
         <p className="mt-3 text-xs text-gray-500">
-          ※ 件名・本文は入力内容から自動で作成されます。提出先のルールに合わせて調整してください。
+          ※ 件名・本文は入力内容から自動で作成されます。必要に応じて調整してください。
         </p>
       </section>
       )}
@@ -887,7 +1145,7 @@ export default function DocumentClient({
       {previewOpen && (
         <PreviewModal onClose={() => setPreviewOpen(false)}>
           <DocumentSheet data={documentData} />
-          <RosterSheet data={documentData} />
+          {includeRoster && <RosterSheet data={documentData} />}
         </PreviewModal>
       )}
     </div>
@@ -898,68 +1156,63 @@ export default function DocumentClient({
 function RosterSheet({ data }: { data: PlanDocumentData }) {
   return (
     <div className="plan-document-sheet mx-auto min-w-[640px] max-w-[794px] bg-white p-10 text-[12px] leading-relaxed text-gray-900 shadow-md print:min-w-0 print:p-0 print:shadow-none">
-      <p className="font-semibold">参加者名簿</p>
-      <table className="mt-2 w-full border-collapse text-[10px] [&_td]:border [&_td]:border-gray-800 [&_td]:px-1 [&_td]:py-1 [&_th]:border [&_th]:border-gray-800 [&_th]:px-1 [&_th]:py-1 [&_th]:font-normal">
+      <p>参加者名簿</p>
+      <table className="mt-3 w-full border-collapse [&_td]:border [&_td]:border-gray-800 [&_td]:px-2 [&_td]:py-2 [&_th]:border [&_th]:border-gray-800 [&_th]:px-2 [&_th]:py-2 [&_th]:font-normal">
         <thead>
           <tr>
-            <th className="w-7"></th>
-            <th>学生番号</th>
-            <th>役職</th>
-            <th className="w-9">学年</th>
-            <th>所属</th>
-            <th>氏名</th>
-            <th>TEL</th>
-            <th>E-mail</th>
-            <th>指導教員氏名</th>
+            <th className="w-10"></th>
+            <th className="w-1/4">学生番号</th>
+            <th className="w-1/4">学科学年</th>
+            <th>氏　　　名</th>
           </tr>
         </thead>
         <tbody>
           {padRoster(data.roster).map((entry, index) => (
             <tr key={index}>
-              <td className="text-center">{index + 1}</td>
-              <td>{entry?.studentId}</td>
-              <td>{entry?.position}</td>
-              <td className="text-center">{entry?.grade}</td>
-              <td>{entry?.department}</td>
+              <td>{index + 1}</td>
+              <td className="text-center">{entry?.studentId}</td>
+              <td>{entry?.departmentGrade}</td>
               <td>{entry?.name}</td>
-              <td>{entry?.phone}</td>
-              <td className="break-all">{entry?.email}</td>
-              <td>{entry?.advisor}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="mt-3 text-[10px] text-gray-700">{ROSTER_FOOTNOTE}</p>
     </div>
   )
 }
 
 
-/** 作業の流れ（入力 → 確認 → 提出）を上部に出す */
+/** 作業の流れ（提出物の確認 → 入力 → 確認 → 提出）を上部に出す */
 function StepNav({
   step,
   onChange,
+  locked,
 }: {
   step: DocumentStep
   onChange: (next: DocumentStep) => void
+  /** 提出物の確認が済むまで（または提出不要なら）、1〜3 は押せない */
+  locked: boolean
 }) {
   const steps: { id: DocumentStep; label: string }[] = [
-    { id: 'input', label: '1. 内容を入力' },
-    { id: 'preview', label: '2. 見た目を確認' },
-    { id: 'submit', label: '3. 提出する' },
+    { id: 'check', label: '0. 提出物' },
+    { id: 'input', label: '1. 入力' },
+    { id: 'preview', label: '2. 確認' },
+    { id: 'submit', label: '3. 提出' },
   ]
 
   return (
     <nav className="flex overflow-hidden rounded-xl border border-gray-200 bg-white print:hidden">
       {steps.map((item) => {
         const active = item.id === step
+        const disabled = locked && item.id !== 'check'
         return (
           <button
             key={item.id}
             type="button"
             onClick={() => onChange(item.id)}
+            disabled={disabled}
             aria-current={active ? 'step' : undefined}
-            className={`pressable flex-1 px-2 py-2.5 text-xs font-bold sm:text-sm ${
+            className={`pressable flex-1 px-2 py-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm ${
               active ? 'bg-green-600 text-white' : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
@@ -1082,5 +1335,122 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-xs font-medium text-gray-600">{label}</span>
       {children}
     </label>
+  )
+}
+
+/** チェックを入れると、下の入力欄が使えるようになる項目 */
+function CheckField({
+  checked,
+  onChange,
+  label,
+  disabled,
+  children,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  label: string
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className={`rounded-lg border p-3 ${checked ? 'border-green-300 bg-green-50/40' : 'border-gray-200'}`}>
+      <label className="mb-2 flex cursor-pointer items-center gap-2 text-sm font-semibold text-gray-700">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          disabled={disabled}
+          className="h-4 w-4"
+        />
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+/** 2〜3択から1つ選ぶボタン群（提出物の確認で使う） */
+function ChoiceGroup<T extends string>({
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  legend: string
+  options: { value: T; label: string; hint: string }[]
+  value: T | null
+  onChange: (value: T) => void
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2 text-xs font-bold text-gray-600">{legend}</legend>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((option) => {
+          const selected = option.value === value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              aria-pressed={selected}
+              className={`pressable rounded-xl border px-3 py-2.5 text-left ${
+                selected
+                  ? 'border-green-500 bg-green-50 ring-1 ring-green-500'
+                  : 'border-gray-200 hover:border-green-300'
+              }`}
+            >
+              <span className="block text-sm font-bold text-gray-800">{option.label}</span>
+              <span className="mt-0.5 block text-xs leading-4 text-gray-500">{option.hint}</span>
+            </button>
+          )
+        })}
+      </div>
+    </fieldset>
+  )
+}
+
+/** 答えに応じて、学生係に出すものを一覧にする */
+function RequirementSummary({ requirement }: { requirement: SubmissionRequirement }) {
+  const items = [
+    { label: '企画書', needed: requirement.planDocument },
+    { label: '参加者名簿', needed: requirement.roster },
+    { label: '顧問確認メールのスクリーンショット', needed: requirement.advisorMail },
+  ]
+
+  return (
+    <div className="rounded-xl border border-gray-200 p-3">
+      <p className="text-xs font-bold text-gray-600">学生係に出すもの</p>
+      <ul className="mt-2 space-y-1">
+        {items.map((item) => (
+          <li
+            key={item.label}
+            className={`flex items-center gap-2 text-sm ${
+              item.needed ? 'font-semibold text-gray-800' : 'text-gray-400'
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                item.needed ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400'
+              }`}
+            >
+              {item.needed ? '✓' : '－'}
+            </span>
+            {item.label}
+            <span className="text-xs font-normal">{item.needed ? '必要' : '不要'}</span>
+          </li>
+        ))}
+      </ul>
+      {requirement.facilityNote && (
+        <p className="mt-2 text-xs leading-5 text-amber-800">
+          体育館や講義室などの施設を使う場合は、別に施設使用許可願（教務係）が必要です。
+        </p>
+      )}
+      {requirement.tournamentNote && (
+        <p className="mt-2 text-xs leading-5 text-amber-800">
+          大会やイベントに参加する場合は、大会要項など詳細が分かるものも一緒に提出します。
+        </p>
+      )}
+    </div>
   )
 }

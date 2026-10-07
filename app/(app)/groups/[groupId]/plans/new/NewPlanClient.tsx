@@ -10,6 +10,7 @@ import { PLAN_TEMPLATES, type PlanTemplate } from '@/lib/planTemplates'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { toUserMessage } from '@/lib/errorMessage'
 import { Copy } from 'lucide-react'
+import SubmissionPlanningHint from '@/components/SubmissionPlanningHint'
 
 type Group = {
   id: string
@@ -770,6 +771,15 @@ export default function NewPlanClient({ group, currentUserId, groupTemplates }: 
                   <strong>前日の23:59</strong>に合わせます。
                 </p>
               )}
+            </div>
+          )}
+          {/* 学校への計画書の提出期限。募集締切はこれより前にする必要がある */}
+          {basic.start_date && (
+            <div className="mt-3">
+              <SubmissionPlanningHint
+                startDate={basic.start_date}
+                recruitDeadline={recruit.enabled ? recruit.deadline : ''}
+              />
             </div>
           )}
         </section>

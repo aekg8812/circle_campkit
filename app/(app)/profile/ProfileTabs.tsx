@@ -13,7 +13,6 @@ type Profile = {
   student_id: string | null
   school_email: string | null
   phone: string | null
-  academic_advisor: string | null
   avatar_url: string | null
 }
 
@@ -42,6 +41,8 @@ type Props = {
   gear: Gear[]
   userId: string
   redirectHomeOnSave?: boolean
+  /** どこかのグループで部長なら、電話番号・メールも必須にする */
+  isLeader?: boolean
 }
 
 const tabs: { id: Tab; label: string }[] = [
@@ -56,6 +57,7 @@ export default function ProfileTabs({
   gear,
   userId,
   redirectHomeOnSave = false,
+  isLeader = false,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('profile')
 
@@ -81,7 +83,12 @@ export default function ProfileTabs({
       </div>
 
       {activeTab === 'profile' && (
-        <ProfileForm profile={profile} userId={userId} redirectHomeOnSave={redirectHomeOnSave} />
+        <ProfileForm
+          profile={profile}
+          userId={userId}
+          redirectHomeOnSave={redirectHomeOnSave}
+          isLeader={isLeader}
+        />
       )}
       {activeTab === 'cars' && <CarsClient initialCars={cars} userId={userId} />}
       {activeTab === 'gear' && <GearClient initialGear={gear} userId={userId} />}

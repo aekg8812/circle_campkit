@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DocumentClient from './DocumentClient'
+import { LEADER_POSITION } from '@/lib/profileCompleteness'
 
 export async function generateMetadata({
   params,
@@ -46,7 +47,7 @@ export default async function PlanDocumentPage({
       .single(),
     supabase
       .from('groups')
-      .select('id, name, document_template, advisor_name, advisor_affiliation, advisor_phone')
+      .select('id, name, document_template, advisor_name')
       .eq('id', groupId)
       .single(),
     supabase
@@ -69,8 +70,7 @@ export default async function PlanDocumentPage({
     redirect(`/groups/${groupId}`)
   }
 
-  const profileColumns =
-    'id, name, grade, department, student_id, school_email, phone, academic_advisor'
+  const profileColumns = 'id, name, grade, department, student_id, school_email, phone'
 
   const [
     { data: scheduleItems },
@@ -87,7 +87,7 @@ export default async function PlanDocumentPage({
       .order('sort_order', { ascending: true }),
     supabase
       .from('participants')
-      .select(`id, user_id, joined_at, status, profiles(${profileColumns})`)
+      .select(`id, user_id, joined_at, status, brings_car, profiles(${profileColumns})`)
       .eq('plan_id', planId)
       .order('joined_at', { ascending: true }),
     supabase
@@ -105,7 +105,7 @@ export default async function PlanDocumentPage({
   ])
 
   // 書類の使い回し: この計画にまだ書類が無いとき、同じグループの直近の計画書から
-  //   顧問教員・宛先・宿泊所・病院などを初期値として引き継ぐ（毎回入力しなくて済む）。
+  //   宛先・表題の種類・宿泊先などを初期値として引き継ぐ（毎回入力しなくて済む）。
   let previousDocument: typeof planDocument = null
   if (!planDocument) {
     const { data: groupPlanIds } = await supabase
@@ -137,26 +137,22 @@ export default async function PlanDocumentPage({
       : participant.profiles,
   }))
 
-  // 代表者に選べる候補（グループのメンバー全員のプロフィール）
-  const memberIds = (groupMembers ?? []).map((member) => member.user_id)
-  const { data: memberProfiles } =
-    memberIds.length > 0
-      ? await supabase.from('profiles').select(profileColumns).in('id', memberIds)
+  // 新様式では、代表者氏名と【責任者】欄に役職「部長」の人が入る（自分では選ばない）。
+  // 部長が複数いるときだけ、その中から誰を載せるか選べるようにする。
+  const leaderIds = (groupMembers ?? [])
+    .filter((member) => member.position === LEADER_POSITION)
+    .map((member) => member.user_id)
+  const { data: leaderProfiles } =
+    leaderIds.length > 0
+      ? await supabase.from('profiles').select(profileColumns).in('id', leaderIds)
       : { data: [] }
 
-  const profileById = new Map((memberProfiles ?? []).map((p) => [p.id, p]))
-
-  // 既定の代表者: 保存済み → 部長（複数いれば先頭）→ 起案者
-  const leaderId = (groupMembers ?? []).find(
-    (member) => member.position === '部長'
-  )?.user_id
-
+  // 既定の代表者: 保存済み（今も部長なら）→ 部長の先頭
+  const savedRepresentativeId = planDocument?.representative_user_id ?? null
   const defaultRepresentativeId =
-    planDocument?.representative_user_id ?? leaderId ?? plan.creator_id ?? null
-
-  const leaderProfile =
-    (defaultRepresentativeId ? profileById.get(defaultRepresentativeId) : null) ??
-    creatorProfile
+    savedRepresentativeId && leaderIds.includes(savedRepresentativeId)
+      ? savedRepresentativeId
+      : (leaderIds[0] ?? null)
 
   return (
     <DocumentClient
@@ -164,16 +160,11 @@ export default async function PlanDocumentPage({
       plan={plan}
       scheduleItems={scheduleItems ?? []}
       participants={normalizedParticipants}
-      memberPositions={(groupMembers ?? []).map((member) => ({
-        user_id: member.user_id,
-        position: member.position ?? '部員',
-      }))}
-      memberProfiles={memberProfiles ?? []}
+      leaderProfiles={leaderProfiles ?? []}
       defaultRepresentativeId={defaultRepresentativeId}
       planDocument={planDocument}
       previousDocument={previousDocument}
       creatorProfile={creatorProfile}
-      leaderProfile={leaderProfile}
       documentTemplate={group.document_template ?? null}
     />
   )

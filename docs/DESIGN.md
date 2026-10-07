@@ -427,4 +427,11 @@ PDF 生成は `@react-pdf/renderer` を推奨（日本語フォント埋め込�
 - ~~グループへの参加方法~~ → **決定: パスワード制**（グループ作成時にパスワードを設定し、参加時にグループを選んでパスワードを入力）。Phase 2 で実装。
 - 募集の同時参加による定員超過の競合制御（先着順を厳密にするなら participants 挿入時にトランザクション or DB 制約で枠を担保）。Phase 4 で要検討。
 - ~~計画書の様式が学科・行事種別で変わる場合のテンプレート切り替え~~ → **実装済み**。`groups.document_template` に行の定義を持ち、グループごとに項目を追加・削除・並べ替えできる（`lib/documentTemplate.ts`）。
-- グループからの脱退・メンバー削除・役職変更（部長による管理）の運用。Phase 2 では最低限「脱退」のみ実装し、管理機能は後回しでよい。
+- グループからの脱退・メンバー削除・役職変更（部長による管理）の運用。Phase 2 では最低限「脱退」のみ実装し、管理機能は後回しでよい。- 計画書の様式変更（企画書 R8.10.02〜）→ **対応済み**（`20240219000000_new_plan_document_format.sql`）。
+  - 表題は「○○利用許可願」「○○企画」のどちらか・両方（`plan_documents.apply_facility` / `apply_event` / `facility_name` / `event_name`）。
+  - 代表者氏名・【責任者】は役職「部長」の人。名簿は学生番号・学科学年・氏名のみ。プロフィールの学籍番号・学科・学年は必須、部長は TEL・Mail も必須。
+  - 入構車両は参加時に答える `participants.brings_car`（null=未回答）から数える。来校予定の学外者は `plan_documents.outside_visitor_count`。
+  - 提出期限は実施日の7営業日前（土日祝・12/29〜1/3 を除く。`lib/submissionDeadline.ts`）。提出済みは `plan_documents.submitted_at`。
+- 提出物の確認（学生係「活動内容ごとの提出書類一覧」）→ **対応済み**（`20240220000000_plan_document_activity_type.sql`）。
+  - 計画書画面の「0. 提出物」で `plan_documents.activity_location`（学内/学外）× `activity_kind`（通常/通常と異なる）を答え、`lib/submissionRequirement.ts` で企画書・名簿・顧問確認メールの要否を決める。
+  - 「通常 × 学内」は提出不要で、期限のお知らせを出さない。未回答の間は出し忘れ防止のため「必要」として扱う。提出先メールは学生係。

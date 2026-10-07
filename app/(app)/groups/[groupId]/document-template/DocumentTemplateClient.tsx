@@ -35,15 +35,13 @@ type Props = {
 
 /** 自動で入る項目が、どこから値を取ってくるかの説明 */
 const SOURCE_HINTS: Record<string, string> = {
-  title: '計画の行事名が入ります',
   dateRange: '計画の日程が入ります',
-  place: '計画の場所エリアが入ります',
+  place: '計画書の「場所」（初めは計画の場所エリア）が入ります',
   schedule: '行程表から自動で作られます',
-  lodging: '計画書の「宿泊所」の入力が入ります',
-  transport: '計画書の「移動手段」の入力が入ります',
-  participantCount: '参加者の人数が入ります',
-  hospital: '計画書の「病院」の入力が入ります',
-  notes: '計画書の「備考」の入力が入ります',
+  vehicles: '参加者が答えた「車を出せるか」から台数が入ります',
+  outsideVisitors: '計画書の「来校予定の学外者」の入力が入ります',
+  lodging: '日帰りなら「無」、泊まりなら宿泊先が入ります',
+  notes: '計画書の「その他報告事項」の入力が入ります',
 }
 
 export default function DocumentTemplateClient({ group, documentTemplate }: Props) {

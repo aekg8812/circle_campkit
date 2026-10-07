@@ -22,9 +22,15 @@ import {
   getDeadlineStatus,
   getPlanPhase,
   isRecruitmentClosed,
+  todayLocal,
   type RecruitmentInfo,
 } from '@/lib/recruitmentStatus'
 import { toUserMessage } from '@/lib/errorMessage'
+import {
+  getSubmissionStatus,
+  submissionStatusClassName,
+  submissionStatusLabel,
+} from '@/lib/submissionDeadline'
 
 type Profile = {
   name: string
@@ -65,6 +71,10 @@ type Props = {
   recruitmentByPlan: Record<string, RecruitmentInfo>
   participantCounts: Record<string, number>
   myParticipantStatus: Record<string, string>
+  /** 計画書を学生係へ提出した日時（計画ごと）。未提出は null */
+  submittedAtByPlan: Record<string, string | null>
+  /** 「提出不要」と答えた計画 */
+  noSubmissionPlanIds: string[]
   currentUserId: string
 }
 
@@ -131,6 +141,8 @@ export default function DashboardClient({
   recruitmentByPlan,
   participantCounts,
   myParticipantStatus,
+  submittedAtByPlan,
+  noSubmissionPlanIds,
   currentUserId,
 }: Props) {
   const router = useRouter()
@@ -736,6 +748,15 @@ export default function DashboardClient({
                 const phase = phaseOf(plan)
                 const showRecruitmentInfo =
                   plan.status === 'recruiting' && recruitment != null
+                // 学校への計画書の提出期限（実施日の7営業日前）。終わった計画には出さない
+                const submission =
+                  phase === 'past' || noSubmissionPlanIds.includes(plan.id)
+                    ? null
+                    : getSubmissionStatus({
+                        startDate: plan.start_date,
+                        submittedAt: submittedAtByPlan[plan.id] ?? null,
+                        today: todayLocal(),
+                      })
 
                 return (
                   <Link
@@ -786,6 +807,14 @@ export default function DashboardClient({
                               )}
                             </span>
                           </div>
+                        )}
+
+                        {submission && (
+                          <span
+                            className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${submissionStatusClassName(submission)}`}
+                          >
+                            {submissionStatusLabel(submission)}
+                          </span>
                         )}
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-1.5">
