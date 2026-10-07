@@ -13,7 +13,7 @@
 - 技術スタック: **Next.js 16 (App Router) + TypeScript / Supabase / Vercel**
 - LINE アプリ内での利用に対応しています（**LIFF**・LINE ログイン）
 - 一部に **Gemini API** を使った補助機能があります（行程表の下書き・持ち物チェック）
-- 本番: https://campkit-king-k-57s-projects.vercel.app
+- 本番: https://campkit-kyutech.vercel.app
 - LINE から開く: https://liff.line.me/2011727048-0Tdp92M9
 - 詳細な仕様・データモデル・ロール定義は **`docs/DESIGN.md`** にすべて書いてあります。これが設計の「正」です。迷ったら DESIGN.md を見る、が原則です。
 
