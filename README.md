@@ -3,7 +3,7 @@
 アウトドアサークルの運営を一元化する Web アプリです。
 計画づくり・参加募集・持ち物の共有から、**学校提出用の計画書の作成**までをまとめて行えます。
 
-- **本番**: https://campkit-king-k-57s-projects.vercel.app
+- **本番**: https://campkit-kyutech.vercel.app
 - **LINE から開く**: https://liff.line.me/2011727048-0Tdp92M9
 
 スマートフォン（特に LINE アプリ内）での利用を前提に作られています。
